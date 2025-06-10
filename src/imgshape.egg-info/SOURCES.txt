@@ -1,0 +1,14 @@
+LICENSE
+README.md
+pyproject.toml
+setup.py
+src/imgshape/__init__.py
+src/imgshape/cli.py
+src/imgshape/resize.py
+src/imgshape.egg-info/PKG-INFO
+src/imgshape.egg-info/SOURCES.txt
+src/imgshape.egg-info/dependency_links.txt
+src/imgshape.egg-info/entry_points.txt
+src/imgshape.egg-info/requires.txt
+src/imgshape.egg-info/top_level.txt
+tests/test_resize.py
