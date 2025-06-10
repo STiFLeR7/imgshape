@@ -1,16 +1,9 @@
 from setuptools import setup, find_packages
-import pathlib
-
-# Get long description from README.md
-this_dir = pathlib.Path(__file__).parent
-long_description = (this_dir / "README.md").read_text()
 
 setup(
     name="imgshape",
-    version="0.1.1",
+    version="0.1.2",
     description="Resize image folders fast for AI/ML workflows",
-    long_description=long_description,
-    long_description_content_type="text/markdown",
     author="Stifler",
     author_email="hillaniljppatel@gmail.com",
     packages=find_packages(where="src"),
