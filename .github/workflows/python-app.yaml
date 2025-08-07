@@ -34,15 +34,15 @@ jobs:
 
       - name: Run Shape Test
         run: |
-          python -m imgshape --path assets/sample_images/test.png
+          python -m imgshape --path assets/sample_images/image_created_with_a_mobile_phone.png
 
       - name: Run Analyze Test
         run: |
-          python -m imgshape --path assets/sample_images/test.png --analyze
+          python -m imgshape --path assets/sample_images/image_created_with_a_mobile_phone.png --analyze
 
       - name: Run Recommendation Test
         run: |
-          python -m imgshape --path assets/sample_images/test.png --recommend
+          python -m imgshape --path assets/sample_images/image_created_with_a_mobile_phone.png --recommend
 
       - name: Run Compatibility Check
         run: |
