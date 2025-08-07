@@ -1,3 +1,10 @@
 token.txt
 src/imgshape.egg-info/
 dist/
+
+src/imgshape/__pycache__/
+src/imgshape/*.pyc  
+
+tests/__pycache__/
+tests/*.pyc
+
