@@ -22,10 +22,10 @@ jobs:
       with:
         python-version: '3.11'
 
-    - name: Install dependencies from local source
+    - name: Install dependencies (editable mode)
       run: |
         python -m pip install --upgrade pip
-        pip install -r requirements.txt || true
+        pip install -e .   # Install from local src/
         pip install pillow seaborn matplotlib
 
     - name: Prepare test image
@@ -40,20 +40,20 @@ jobs:
 
     - name: CLI Test - Shape detection
       run: |
-        python src/imgshape/__main__.py --path sample/test.png
+        python -m imgshape --path sample/test.png
 
     - name: CLI Test - Analysis
       run: |
-        python src/imgshape/__main__.py --path sample/test.png --analyze
+        python -m imgshape --path sample/test.png --analyze
 
     - name: CLI Test - Recommendation
       run: |
-        python src/imgshape/__main__.py --path sample/test.png --recommend
+        python -m imgshape --path sample/test.png --recommend
 
     - name: CLI Test - Visualization
       run: |
-        python src/imgshape/__main__.py --viz sample || true
+        python -m imgshape --viz sample || true
 
     - name: CLI Test - Model Compatibility
       run: |
-        python src/imgshape/__main__.py --dir sample --check mobilenet_v2
+        python -m imgshape --dir sample --check mobilenet_v2
