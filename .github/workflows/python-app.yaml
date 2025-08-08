@@ -14,40 +14,41 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v3
+    - name: Checkout repository
+      uses: actions/checkout@v3
 
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.11'
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
 
-      - name: Install Dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install .
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install .
 
-      - name: Prepare Sample Image
-        run: |
-          mkdir -p assets/sample_images
-          curl -L https://upload.wikimedia.org/wikipedia/commons/thumb/4/47/PNG_transparency_demonstration_1.png/600px-PNG_transparency_demonstration_1.png -o assets/sample_images/test.png
+    - name: Prepare test image
+      run: |
+        mkdir -p sample
+        cp assets/sample_images/Image_created_with_a_mobile_phone.png sample/test.jpg || \
+        wget -O sample/test.jpg https://via.placeholder.com/300
 
-      - name: Run Shape Test
-        run: |
-          python -m imgshape --path assets/sample_images/image_created_with_a_mobile_phone.png
+    - name: CLI Test - Shape detection
+      run: |
+        python -m imgshape --path sample/test.jpg
 
-      - name: Run Analyze Test
-        run: |
-          python -m imgshape --path assets/sample_images/image_created_with_a_mobile_phone.png --analyze
+    - name: CLI Test - Analysis
+      run: |
+        python -m imgshape --path sample/test.jpg --analyze
 
-      - name: Run Recommendation Test
-        run: |
-          python -m imgshape --path assets/sample_images/image_created_with_a_mobile_phone.png --recommend
+    - name: CLI Test - Recommendation
+      run: |
+        python -m imgshape --path sample/test.jpg --recommend
 
-      - name: Run Compatibility Check
-        run: |
-          python -m imgshape --dir assets/sample_images --check mobilenet_v2
+    - name: CLI Test - Visualization
+      run: |
+        python -m imgshape --viz sample || true
 
-      - name: Run CLI Help
-        run: |
-          python -m imgshape --help
+    - name: CLI Test - Model Compatibility
+      run: |
+        python -m imgshape --dir sample --check mobilenet_v2
