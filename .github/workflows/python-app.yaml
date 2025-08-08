@@ -22,7 +22,7 @@ jobs:
       with:
         python-version: '3.11'
 
-    - name: Install dependencies
+    - name: Install dependencies (local package)
       run: |
         python -m pip install --upgrade pip
         pip install -e .
@@ -30,20 +30,24 @@ jobs:
     - name: Prepare test image
       run: |
         mkdir -p sample
-        cp assets/sample_images/Image_created_with_a_mobile_phone.png || \
-        wget -O assets/sample_images/Image_created_with_a_mobile_phone.png https://via.placeholder.com/300
+        if [ -f assets/sample_images/Image_created_with_a_mobile_phone.png ]; then
+          cp assets/sample_images/Image_created_with_a_mobile_phone.png sample/test.png
+        else
+          wget -O sample/test.png https://raw.githubusercontent.com/STiFLeR7/imgshape/master/assets/sample_images/Image_created_with_a_mobile_phone.png || \
+          wget -O sample/test.png https://upload.wikimedia.org/wikipedia/commons/7/77/Delete_key1.jpg
+        fi
 
     - name: CLI Test - Shape detection
       run: |
-        python -m imgshape --path assets/sample_images/Image_created_with_a_mobile_phone.png
+        python -m imgshape --path sample/test.png
 
     - name: CLI Test - Analysis
       run: |
-        python -m imgshape --path assets/sample_images/Image_created_with_a_mobile_phone.png --analyze
+        python -m imgshape --path sample/test.png --analyze
 
     - name: CLI Test - Recommendation
       run: |
-        python -m imgshape --path assets/sample_images/Image_created_with_a_mobile_phone.png --recommend
+        python -m imgshape --path sample/test.png --recommend
 
     - name: CLI Test - Visualization
       run: |
