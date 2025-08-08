@@ -7,8 +7,11 @@ from imgshape.compatibility import check_model_compatibility
 from imgshape.viz import plot_shape_distribution
 from imgshape.gui import launch_gui
 
+
 def main():
-    parser = argparse.ArgumentParser(description="📦 imgshape v2.0.0 — Image Shape, Analysis & Preprocessing Toolkit")
+    parser = argparse.ArgumentParser(
+        description="📦 imgshape v2.0.0 — Image Shape, Analysis & Preprocessing Toolkit"
+    )
 
     parser.add_argument("--path", type=str, help="Path to a single image")
     parser.add_argument("--url", type=str, help="Image URL to analyze")
@@ -23,40 +26,68 @@ def main():
     args = parser.parse_args()
 
     # Single image shape
-    if args.path and not any([args.analyze, args.recommend]):
+    if args.path and not any([args.analyze, args.recommend, args.check]):
         print(f"\n📐 Shape for: {args.path}")
-        print(get_shape(args.path))
+        try:
+            print(get_shape(args.path))
+        except Exception as e:
+            print(f"❌ Error getting shape: {e}")
 
     # Analyze image
     if args.path and args.analyze:
         print(f"\n🔍 Analysis for: {args.path}")
-        print(analyze_type(args.path))
+        try:
+            print(analyze_type(args.path))
+        except Exception as e:
+            print(f"❌ Error analyzing image: {e}")
 
     # Recommend preprocessing
     if args.path and args.recommend:
         print(f"\n🧠 Recommendation for: {args.path}")
-        print(recommend_preprocessing(args.path))
+        try:
+            print(recommend_preprocessing(args.path))
+        except Exception as e:
+            print(f"❌ Error generating recommendation: {e}")
 
     # Model compatibility
     if args.dir and args.check:
-        passed, failed = check_model_compatibility(args.dir, args.check)
-        print(f"\n✅ Model: {args.check}")
-        print(f"🖼️ Total Images: {passed + failed}")
-        print(f"✔️ Passed: {passed}")
-        if failed:
-            print(f"❌ Failed: {failed}")
-        else:
-            print("🎉 All images are compatible!")
+        print(f"\n✅ Model Compatibility Check — {args.check}")
+        try:
+            result = check_model_compatibility(args.dir, args.check)
+            if isinstance(result, dict):
+                total = result.get("total", 0)
+                passed = result.get("passed", 0)
+                failed = result.get("failed", 0)
+            else:
+                # Backwards compatibility for old tuple format
+                passed, failed = result
+                total = passed + failed
+
+            print(f"🖼️ Total Images: {total}")
+            print(f"✔️ Passed: {passed}")
+            if failed:
+                print(f"❌ Failed: {failed}")
+            else:
+                print("🎉 All images are compatible!")
+        except Exception as e:
+            print(f"❌ Error checking model compatibility: {e}")
 
     # Visualization
     if args.viz:
         print(f"\n📊 Plotting shape distribution for: {args.viz}")
-        plot_shape_distribution(args.viz)
+        try:
+            plot_shape_distribution(args.viz)
+        except Exception as e:
+            print(f"❌ Error plotting: {e}")
 
     # Web GUI
     if args.web:
         print("\n🚀 Launching imgshape Web GUI...")
-        launch_gui()
+        try:
+            launch_gui()
+        except Exception as e:
+            print(f"❌ Error launching GUI: {e}")
+
 
 if __name__ == "__main__":
     main()
