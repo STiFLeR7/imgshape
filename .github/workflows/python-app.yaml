@@ -42,6 +42,7 @@ jobs:
       run: |
         python -m imgshape --path sample/test.png
 
+
     - name: CLI Test - Analysis
       run: |
         python -m imgshape --path sample/test.png --analyze
