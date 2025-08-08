@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "imgshape"
-version = "2.0.0"
+version = "2.0.1"
 description = "🖼️ Get image shapes, analyze type, get preprocessing recommendations & check model compatibility"
 readme = "README.md"
 authors = [

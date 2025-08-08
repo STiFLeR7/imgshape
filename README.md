@@ -1,4 +1,4 @@
-﻿# 🖼️ imgshape — Smart Image Analysis & Preprocessing Toolkit (v2.0.0)
+﻿# 🖼️ imgshape — Smart Image Analysis & Preprocessing Toolkit (v2.0.1)
 
 `imgshape` is a lightweight Python toolkit designed for **image shape detection**, **dataset inspection**, **preprocessing recommendation**, and **AI model compatibility checks** — all optimized for **ML/DL workflows**, both in research and production.
 
