@@ -31,19 +31,19 @@ jobs:
       run: |
         mkdir -p sample
         cp assets/sample_images/Image_created_with_a_mobile_phone.png || \
-        wget -O sample/assets/sample_images/Image_created_with_a_mobile_phone.png https://via.placeholder.com/300
+        wget -O assets/sample_images/Image_created_with_a_mobile_phone.png https://via.placeholder.com/300
 
     - name: CLI Test - Shape detection
       run: |
-        python -m imgshape --path sample/assets/sample_images/Image_created_with_a_mobile_phone.png
+        python -m imgshape --path assets/sample_images/Image_created_with_a_mobile_phone.png
 
     - name: CLI Test - Analysis
       run: |
-        python -m imgshape --path sample/assets/sample_images/Image_created_with_a_mobile_phone.png --analyze
+        python -m imgshape --path assets/sample_images/Image_created_with_a_mobile_phone.png --analyze
 
     - name: CLI Test - Recommendation
       run: |
-        python -m imgshape --path sample/assets/sample_images/Image_created_with_a_mobile_phone.png --recommend
+        python -m imgshape --path assets/sample_images/Image_created_with_a_mobile_phone.png --recommend
 
     - name: CLI Test - Visualization
       run: |
