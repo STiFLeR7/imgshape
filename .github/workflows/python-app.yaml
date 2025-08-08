@@ -22,7 +22,7 @@ jobs:
       with:
         python-version: '3.11'
 
-    - name: Install dependencies (local package)
+    - name: Install dependencies from local source
       run: |
         python -m pip install --upgrade pip
         pip install -e .
