@@ -2,7 +2,7 @@
 
 `imgshape` is a lightweight Python toolkit designed for **image shape detection**, **dataset inspection**, **preprocessing recommendation**, and **AI model compatibility checks** — all optimized for **ML/DL workflows**, both in research and production.
 
-https://github.com/STiFLeR7/imgshape/blob/ef4dfa83589da3266127fd317dac74544399b24d/2FBC545B-BD73-42E1-93B2-9A8C2942D57F.png
+![alt text](image.png)
 ---
 
 ## ⚡️ Why use `imgshape`?
