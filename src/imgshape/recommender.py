@@ -166,6 +166,25 @@ def recommend_preprocessing(input_obj: Any) -> Dict[str, Any]:
 
     return rec
 
+# src/imgshape/recommender.py (append near bottom)
+
+def recommend_dataset(dataset_stats_or_path) -> Dict[str, Any]:
+    """
+    Provide dataset-level preprocessing recommendations.
+    Accepts either:
+      - a precomputed dataset stats dict (from analyze_dataset), OR
+      - a path to a dataset folder.
+    Returns a dict summarizing preprocessing recommendations for the dataset.
+    """
+    # If stats dict passed
+    if isinstance(dataset_stats_or_path, dict):
+        return recommend_preprocessing(dataset_stats_or_path)
+
+    # If path passed (string or Path), just compute one representative recommendation
+    try:
+        return recommend_preprocessing(dataset_stats_or_path)
+    except Exception as e:
+        return {"error": f"recommend_dataset failed: {e}"}
 
 # Backwards compatibility alias
 recommend = recommend_preprocessing
