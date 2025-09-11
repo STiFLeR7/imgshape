@@ -105,4 +105,3 @@ print(plan.recommended_order)
 
 ```
 
----
