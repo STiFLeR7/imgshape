@@ -1,4 +1,4 @@
-from src.imgshape.compatibility import check_model_compatibility
+from imgshape.compatibility import check_model_compatibility
 
 def test_check_model_compatibility():
     result = check_model_compatibility("assets/sample_images", model="mobilenet_v2")

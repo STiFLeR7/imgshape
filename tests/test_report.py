@@ -1,5 +1,5 @@
 from pathlib import Path
-from src.imgshape.report import generate_markdown_report
+from imgshape.report import generate_markdown_report
 def test_generate_markdown(tmp_path):
     md = tmp_path / "report.md"
     stats = {"entropy_mean":4.0}

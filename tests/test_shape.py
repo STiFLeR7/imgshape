@@ -1,5 +1,5 @@
 import os
-from src.imgshape.shape import get_shape
+from imgshape.shape import get_shape
 
 def test_get_shape():
     img_path = "assets/sample_images/image_created_with_a_mobile_phone.png"

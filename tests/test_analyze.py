@@ -1,5 +1,5 @@
 # test_analyze.py
-from src.imgshape.analyze import analyze_type
+from imgshape.analyze import analyze_type
 
 def test_analyze_type():
     result = analyze_type("assets/sample_images/image_created_with_a_mobile_phone.png")
