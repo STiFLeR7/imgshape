@@ -48,28 +48,31 @@ def _extract_dims(shapes_dict: Dict[str, Tuple[int, int, int]]) -> Tuple[List[in
 # -------------------------------
 
 def plot_shape_distribution(folder_path: str, save: bool = False, out_dir: str = "output") -> Optional[str]:
-    """
-    Plot histogram distribution of image widths and heights.
-
-    Args:
-        folder_path: directory of images
-        save: whether to save PNG to disk
-        out_dir: folder to save in
-
-    Returns:
-        str path to saved file if save=True, else None
-    """
     image_paths = _get_image_paths(folder_path)
     shapes_dict = get_shape_batch(image_paths)
 
     widths, heights, _ = _extract_dims(shapes_dict)
 
     plt.figure(figsize=(10, 5))
-    plt.hist(widths, bins=15, alpha=0.6, label="Widths", color="#5DADE2")
-    plt.hist(heights, bins=15, alpha=0.6, label="Heights", color="#F5B041")
+    if len(widths) == 0 and len(heights) == 0:
+        plt.text(0.5, 0.5, "No images found to plot", ha="center", va="center")
+    else:
+        # Single-sample: draw a visible bar + vertical lines and annotate values
+        if len(widths) == 1 and len(heights) == 1:
+            w, h = widths[0], heights[0]
+            # draw one narrow bar for widths and heights for visual clarity
+            plt.hist([w], bins=1, alpha=0.6, label=f'Width ({w}px)', color="#5DADE2")
+            plt.hist([h], bins=1, alpha=0.6, label=f'Height ({h}px)', color="#F5B041")
+            plt.vlines([w], 0, 1, colors='#21618C', linestyles='--')
+            plt.vlines([h], 0, 1, colors='#B9770E', linestyles=':')
+            plt.ylim(0, 1.2)
+        else:
+            plt.hist(widths, bins=15, alpha=0.6, label='Widths', color="#5DADE2")
+            plt.hist(heights, bins=15, alpha=0.6, label='Heights', color="#F5B041")
+
     plt.xlabel("Pixels")
     plt.ylabel("Frequency")
-    plt.title("🧮 Image Size Distribution")
+    plt.title("Image Size Distribution")
     plt.legend()
     plt.tight_layout()
 
@@ -81,25 +84,32 @@ def plot_shape_distribution(folder_path: str, save: bool = False, out_dir: str =
         return out_path
     else:
         plt.show()
+        plt.close()
         return None
 
-
 def plot_image_dimensions(folder_path: str, save: bool = False, out_dir: str = "output") -> Optional[str]:
-    """
-    Scatter plot of width vs. height for all images.
-
-    Returns path if saved, else None.
-    """
     image_paths = _get_image_paths(folder_path)
     shapes_dict = get_shape_batch(image_paths)
 
     widths, heights, _ = _extract_dims(shapes_dict)
 
     plt.figure(figsize=(6, 6))
-    plt.scatter(widths, heights, alpha=0.6, c="#48C9B0", edgecolors="black")
+    if len(widths) == 0:
+        plt.text(0.5, 0.5, "No images found to plot", ha="center", va="center")
+    elif len(widths) == 1:
+        w, h = widths[0], heights[0]
+        plt.scatter([w], [h], s=300, alpha=0.9, edgecolors='black', zorder=3)
+        plt.annotate(f"{w}×{h}", (w, h), textcoords="offset points", xytext=(10,10))
+        # set axis limits with some margin so the point is nicely centered
+        margin = max(100, int(0.05 * max(w, h)))
+        plt.xlim(w - margin, w + margin)
+        plt.ylim(h - margin, h + margin)
+    else:
+        plt.scatter(widths, heights, alpha=0.6, c="#48C9B0", edgecolors='black')
+
     plt.xlabel("Width (px)")
     plt.ylabel("Height (px)")
-    plt.title("🖼️ Image Dimension Scatter Plot")
+    plt.title("Image Dimension Scatter Plot")
     plt.grid(True, linestyle="--", alpha=0.5)
     plt.tight_layout()
 
@@ -111,8 +121,8 @@ def plot_image_dimensions(folder_path: str, save: bool = False, out_dir: str = "
         return out_path
     else:
         plt.show()
+        plt.close()
         return None
-
 
 def plot_channel_distribution(folder_path: str, save: bool = False, out_dir: str = "output") -> Optional[str]:
     """

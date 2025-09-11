@@ -4,22 +4,41 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "imgshape"
-version = "2.0.1"
-description = "🖼️ Get image shapes, analyze type, get preprocessing recommendations & check model compatibility"
+version = "2.1.0"
+description = "imgshape — image shape detection, dataset analysis, preprocessing & augmentation recommendations, reports and PyTorch loader helpers"
 readme = "README.md"
 authors = [
-    { name="Stifler", email="stiflerxd.ai@cudabit.live" }
+  { name="Stifler", email="stiflerxd.ai@cudabit.live" }
 ]
 license = { text = "MIT" }
 requires-python = ">=3.8"
 
+# runtime dependencies (keep core small; heavy / optional libs as extras)
 dependencies = [
-    "Pillow>=9.0.0",
-    "numpy>=1.21.0",
-    "matplotlib>=3.4.0",
-    "seaborn>=0.11.0",
-    "scikit-image>=0.19.0",
-    "gradio>=3.0.0"
+  "Pillow>=9.0.0",
+  "numpy>=1.21.0",
+  "matplotlib>=3.4.0",
+  "scikit-image>=0.19.0",
+  "gradio>=3.0.0"
+]
+
+# optional dependency groups (install with `pip install -e .[torch]` etc.)
+[project.optional-dependencies]
+torch = [
+  "torch>=1.12.0; platform_system != 'Windows' or python_version >= '3.8'",
+  "torchvision>=0.13.0",
+]
+pdf = [
+  "weasyprint>=53.0"
+]
+viz = [
+  "seaborn>=0.11.0"
+]
+dev = [
+  "pytest>=7.0",
+  "black>=23.0",
+  "flake8>=3.9",
+  "pre-commit>=2.20"
 ]
 
 [project.urls]
@@ -27,6 +46,7 @@ Homepage = "https://github.com/STiFLeR7/imgshape"
 Source = "https://github.com/STiFLeR7/imgshape"
 Issues = "https://github.com/STiFLeR7/imgshape/issues"
 
+# CLI entry point (PEP 621 style)
 [project.scripts]
 imgshape = "imgshape.cli:main"
 
@@ -35,3 +55,13 @@ package-dir = {"" = "src"}
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[metadata]
+# lightweight classifiers; you can extend these as needed
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent",
+  "Topic :: Scientific/Engineering :: Image Recognition",
+]
+keywords = ["images", "dataset", "visualization", "augmentation", "pytorch", "ml"]
