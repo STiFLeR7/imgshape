@@ -1,0 +1,8 @@
+streamlit
+imgshape==2.1.0
+matplotlib
+torch
+torchvision
+weasyprint
+Pillow
+numpy
