@@ -87,7 +87,7 @@ print(plan.recommended_order)
 
 ---
 
-## 📝 New in v2.1.1
+## 📝 New in v2.1.3
 
 * 🔄 **Augmentation recommender** (`--augment`, `augmentations.py`)
 * 📝 **Dataset report generator** (`--report`, Markdown/HTML/PDF export)
