@@ -13,8 +13,8 @@ from imgshape.viz import plot_shape_distribution
 from imgshape.torchloader import to_torch_transform
 
 # Page config
-st.set_page_config(page_title="imgshape v2.1.0", layout="wide")
-st.title("🖼️ imgshape — Smart Dataset Assistant (v2.1.0)")
+st.set_page_config(page_title="imgshape v2.1.1", layout="wide")
+st.title("🖼️ imgshape — Smart Dataset Assistant (v2.1.1)")
 
 st.markdown(
     "Upload an image or provide a dataset folder to analyze, "
