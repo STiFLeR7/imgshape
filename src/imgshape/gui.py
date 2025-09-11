@@ -1,251 +1,149 @@
 # src/imgshape/gui.py
-"""
-Gradio GUI for imgshape v2.1.0+
-
-Tabs:
- - Analyze: single-image shape + stats
- - Recommend: preprocessing + augmentation plan (dataset-aware)
- - Report: generate Markdown (and optionally HTML/PDF if converters exist)
- - TorchLoader: generate torchvision transform snippet or Compose object preview
-
-This file is defensive: optional modules (report generation, torch) are handled gracefully.
-"""
 from __future__ import annotations
 
-import json
-import tempfile
-from pathlib import Path
+from io import BytesIO
 from typing import Any, Dict, Optional
-
+from PIL import Image, UnidentifiedImageError
 import gradio as gr
 
 from imgshape.shape import get_shape
-from imgshape.analyze import analyze_type, get_entropy
+from imgshape.analyze import analyze_type
 from imgshape.recommender import recommend_preprocessing, recommend_dataset
 
-# optional imports guarded
+# Optional: AugmentationRecommender for dataset-level augment suggestions
 try:
-    from imgshape.report import (
-        generate_markdown_report,
-        generate_html_report,
-        generate_pdf_report,
-    )
+    from imgshape.augmentations import AugmentationRecommender
 except Exception:
-    generate_markdown_report = None
-    generate_html_report = None
-    generate_pdf_report = None
-
-try:
-    from imgshape.torchloader import to_torch_transform, to_dataloader
-except Exception:
-    to_torch_transform = None
-    to_dataloader = None
+    AugmentationRecommender = None
 
 
-def _safe_json(obj: Any) -> str:
+def _open_bytes_to_pil(b: Any) -> Optional[Image.Image]:
+    # Accept filepath string, BytesIO, or file-like object
+    if b is None:
+        return None
+    if isinstance(b, Image.Image):
+        return b.convert("RGB")
     try:
-        return json.dumps(obj, indent=2, default=str)
+        if hasattr(b, "read"):
+            b.seek(0)
+            data = b.read()
+            return Image.open(BytesIO(data)).convert("RGB")
+    except UnidentifiedImageError:
+        return None
     except Exception:
-        return str(obj)
-
-
-# ----- Handlers used by the UI -----
-def analyze_handler(image_path: str) -> Dict[str, Any]:
-    """Return a JSON-like dict with shape and analysis for a single image."""
-    out = {}
+        return None
     try:
-        out["shape"] = get_shape(image_path)
-    except Exception as e:
-        out["shape_error"] = str(e)
+        # if it's a path
+        return Image.open(str(b)).convert("RGB")
+    except Exception:
+        return None
 
+
+def analyze_handler(inp: Any) -> Dict[str, Any]:
+    """Return shape + analysis for a given input (file, path, URL)."""
     try:
-        analysis = analyze_type(image_path)
-        # include entropy explicitly (helpful for augmentation heuristics)
-        try:
-            analysis["entropy"] = round(get_entropy(image_path), 3)
-        except Exception:
+        # if input is a directory path -> not supported here (use dataset analyze)
+        if isinstance(inp, str):
+            # if path looks like a directory, let GUI call dataset functions separately
             pass
-        out["analysis"] = analysis
+        pil = _open_bytes_to_pil(inp)
+        shape = get_shape(pil) if pil is not None else None
+        analysis = analyze_type(pil if pil is not None else inp)
+        return {"shape": shape, "analysis": analysis}
     except Exception as e:
-        out["analysis_error"] = str(e)
-
-    return out
+        return {"error": str(e)}
 
 
-def recommend_handler(image_path: str, include_augment: bool, seed: Optional[int]) -> Dict[str, Any]:
+def recommend_handler(inp: Any, include_augment: bool = False, seed: Optional[int] = None) -> Dict[str, Any]:
     """
-    Recommend preprocessing + (optionally) augmentation plan.
-    For a single image we treat it as a dataset of 1 (use analyze_type).
+    For a single image: call recommend_preprocessing(pil_image).
+    For a directory path: call recommend_dataset(path).
     """
     try:
-        stats = analyze_type(image_path)
-    except Exception:
-        stats = {"image_count": 1}
-    # prefer dataset-level recommend if available
-    try:
-        rec = recommend_dataset(stats, seed=seed)  # new unified API
-    except Exception:
-        # fallback to legacy recommend_preprocessing (path-based)
-        try:
-            prep = recommend_preprocessing(image_path)
-        except Exception as e:
-            prep = {"error": str(e)}
-        rec = {"preprocessing": prep, "augmentation_plan": {}}
+        # if input is a string path and is a directory, call dataset-level recommender
+        if isinstance(inp, str):
+            from pathlib import Path
+            p = Path(inp)
+            if p.exists() and p.is_dir():
+                ds_rec = recommend_dataset(str(p))
+                return {"dataset_recommendation": ds_rec}
 
-    if not include_augment:
-        # hide augmentation_plan if user didn't request it
-        rec["augmentation_plan"] = {}
+        pil = _open_bytes_to_pil(inp)
+        if pil is None:
+            return {"error": "Could not open image input"}
 
-    return rec
-
-
-def report_handler(image_path: str, include_augment: bool, seed: Optional[int]) -> Dict[str, Any]:
-    """
-    Generate a Markdown report and return metadata + download link if created.
-    Returns dict with keys: status, md_path (if produced), html_path (if produced), pdf_path (if produced)
-    """
-    tmpdir = Path(tempfile.mkdtemp(prefix="imgshape_gui_"))
-    out_base = tmpdir / "imgshape_report"
-
-    # gather stats & recommendations
-    try:
-        stats = analyze_type(image_path)
-    except Exception:
-        stats = {"image_count": 1}
-
-    try:
-        unified = recommend_dataset(stats, seed=seed)
-    except Exception:
-        unified = {"preprocessing": recommend_preprocessing(image_path), "augmentation_plan": {}}
-
-    if not include_augment:
-        unified["augmentation_plan"] = {}
-
-    result = {"status": "ok", "paths": {}}
-
-    # markdown
-    if generate_markdown_report is None:
-        result["status"] = "md_missing"
-        result["message"] = "Markdown report generator not available."
-        return result
-
-    try:
-        md_path = generate_markdown_report(
-            out_base.with_suffix(".md"),
-            stats,
-            compatibility={},
-            preprocessing=unified.get("preprocessing", {}),
-            augmentation_plan=unified.get("augmentation_plan", {}),
-        )
-        result["paths"]["markdown"] = str(md_path)
+        pre = recommend_preprocessing(pil)
+        out = {"preprocessing": pre}
+        if include_augment and AugmentationRecommender is not None:
+            ar = AugmentationRecommender(seed=seed)
+            plan = ar.recommend_for_dataset({"entropy_mean": pre.get("entropy"), "image_count": 1})
+            out["augmentation_plan"] = {"order": plan.recommended_order, "augmentations": [a.__dict__ for a in plan.augmentations]}
+        return out
     except Exception as e:
-        result["status"] = "error"
-        result["error"] = f"Error generating markdown: {e}"
-        return result
-
-    # html (optional)
-    if generate_html_report is not None:
-        try:
-            html_path = out_base.with_suffix(".html")
-            generate_html_report(md_path, html_path)
-            result["paths"]["html"] = str(html_path)
-        except Exception:
-            # non-fatal
-            pass
-
-    # pdf (optional)
-    if generate_pdf_report is not None and "html" in result["paths"]:
-        try:
-            pdf_path = out_base.with_suffix(".pdf")
-            generate_pdf_report(Path(result["paths"]["html"]), pdf_path)
-            result["paths"]["pdf"] = str(pdf_path)
-        except Exception:
-            pass
-
-    return result
+        return {"error": str(e)}
 
 
-def torchloader_handler(image_path: str, include_augment: bool, seed: Optional[int]) -> Dict[str, Any]:
-    """
-    Produce a torchvision transform snippet or Compose object preview.
-    Returns dict with keys: snippet (str) or info.
-    """
+def report_handler(dataset_path: str, include_augment: bool = False, seed: Optional[int] = None) -> Dict[str, Any]:
+    """Wrapper for generating a report. Returns paths/status dict (non-blocking minimal)."""
     try:
-        stats = analyze_type(image_path)
-    except Exception:
-        stats = {"image_count": 1}
+        # Prefer dataset-level stats if possible; we call recommend_dataset to get preprocessing summary
+        ds_rec = recommend_dataset(dataset_path)
+        # minimal report generation could be handled here; for GUI we return the recommended summary
+        return {"status": "ok", "dataset_recommendation": ds_rec}
+    except Exception as e:
+        return {"error": str(e)}
 
+
+def torchloader_handler(inp: Any, include_augment: bool = False, seed: Optional[int] = None) -> Dict[str, Any]:
+    """Return a transform snippet or an object (string or repr) for the UI to display."""
     try:
-        unified = recommend_dataset(stats, seed=seed)
-    except Exception:
-        unified = {"preprocessing": recommend_preprocessing(image_path), "augmentation_plan": {}}
-
-    if not include_augment:
-        unified["augmentation_plan"] = {}
-
-    if to_torch_transform is None:
-        return {"error": "torchloader not available (imgshape.torchloader missing). Install optional torch extra."}
-
-    try:
-        transforms_obj_or_snippet = to_torch_transform(unified.get("augmentation_plan", {}), unified.get("preprocessing", {}))
-        if isinstance(transforms_obj_or_snippet, str):
-            return {"snippet": transforms_obj_or_snippet}
+        # prefer preprocessing dict from single-image or dataset
+        if isinstance(inp, str):
+            from pathlib import Path
+            p = Path(inp)
+            if p.exists() and p.is_dir():
+                pre = recommend_dataset(str(p))
+            else:
+                pre = recommend_preprocessing(inp)
         else:
-            # Not easily serializable — show repr and a short help text
-            return {"info": "torch transforms.Compose created (use programmatically).", "repr": repr(transforms_obj_or_snippet)}
+            pil = _open_bytes_to_pil(inp)
+            if pil is None:
+                return {"error": "Could not open input"}
+            pre = recommend_preprocessing(pil)
+
+        # import lazy to avoid heavy deps at module import
+        from imgshape.torchloader import to_torch_transform
+
+        snippet_or_transform = to_torch_transform({}, pre or {})
+        if isinstance(snippet_or_transform, str):
+            return {"snippet": snippet_or_transform}
+        else:
+            return {"transform_repr": repr(snippet_or_transform)}
     except Exception as e:
-        return {"error": f"Error building transforms: {e}"}
+        return {"error": str(e)}
 
 
-# ----- Build Gradio Blocks UI -----
 def launch_gui(server_port: int = 7860, share: bool = False):
-    title = "📦 imgshape GUI (v2.1.0)"
-    with gr.Blocks(title=title) as demo:
-        gr.Markdown(f"# {title}\nMulti-tab dataset assistant: Analyze → Recommend → Report → TorchLoader")
+    """Small Gradio interface that binds the handlers above."""
+    import gradio as gr
 
-        with gr.Tab("Analyze"):
-            with gr.Row():
-                inp_img = gr.Image(type="filepath", label="Upload Image")
-                out_json = gr.JSON(label="Analysis Output")
-            analyze_btn = gr.Button("Analyze")
-            analyze_btn.click(fn=analyze_handler, inputs=inp_img, outputs=out_json)
+    with gr.Blocks(title="imgshape") as demo:
+        with gr.Row():
+            with gr.Column():
+                inp = gr.Image(type="filepath", label="Upload Image or enter path")
+                analyze_btn = gr.Button("Analyze")
+                recommend_btn = gr.Button("Recommend")
+                torch_btn = gr.Button("TorchLoader")
+            with gr.Column():
+                out = gr.JSON(label="Output")
 
-        with gr.Tab("Recommend"):
-            with gr.Row():
-                rec_img = gr.Image(type="filepath", label="Upload Image / Sample")
-                include_aug = gr.Checkbox(label="Include augmentation recommendations", value=True)
-                seed_in = gr.Number(label="Seed (optional)", value=None, precision=0)
-            rec_out = gr.JSON(label="Recommendations (preprocessing + augmentations)")
-            rec_btn = gr.Button("Recommend")
-            rec_btn.click(fn=recommend_handler, inputs=[rec_img, include_aug, seed_in], outputs=rec_out)
-
-        with gr.Tab("Report"):
-            with gr.Row():
-                rep_img = gr.Image(type="filepath", label="Upload Image / Sample")
-                rep_include_aug = gr.Checkbox(label="Include augmentations in report", value=True)
-                rep_seed = gr.Number(label="Seed (optional)", value=None, precision=0)
-            rep_status = gr.JSON(label="Report generation result")
-            rep_btn = gr.Button("Generate Report (Markdown)")
-            rep_btn.click(fn=report_handler, inputs=[rep_img, rep_include_aug, rep_seed], outputs=rep_status)
-
-        with gr.Tab("TorchLoader"):
-            with gr.Row():
-                t_img = gr.Image(type="filepath", label="Upload Image / Sample")
-                t_include_aug = gr.Checkbox(label="Include augmentations", value=True)
-                t_seed = gr.Number(label="Seed (optional)", value=None, precision=0)
-            t_out = gr.JSON(label="Torchloader output (snippet or info)")
-            t_btn = gr.Button("Build Transform Snippet")
-            t_btn.click(fn=torchloader_handler, inputs=[t_img, t_include_aug, t_seed], outputs=t_out)
-
-        gr.Markdown(
-            "Notes:\n"
-            "- Report generation requires `imgshape.report`. HTML/PDF outputs require `markdown` and `weasyprint` respectively.\n"
-            "- TorchLoader requires `imgshape.torchloader` and, for real Compose objects, `torch`/`torchvision`.\n"
-        )
+        analyze_btn.click(fn=analyze_handler, inputs=inp, outputs=out)
+        recommend_btn.click(fn=recommend_handler, inputs=inp, outputs=out)
+        torch_btn.click(fn=torchloader_handler, inputs=inp, outputs=out)
 
     demo.launch(server_port=server_port, share=share)
 
 
+# allow direct run for quick dev
 if __name__ == "__main__":
-    # default run for local dev
     launch_gui()

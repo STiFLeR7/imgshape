@@ -1,0 +1,51 @@
+{
+  "title": "imgshape dataset report",
+  "md": "D:\\imgshape\\report.md",
+  "stats": {
+    "image_count": 1,
+    "source_dir": "assets/sample_images"
+  },
+  "compatibility": {},
+  "preprocessing": {
+    "resize": {
+      "size": [
+        224,
+        224
+      ],
+      "method": "bilinear"
+    },
+    "normalize": {
+      "mean": [
+        0.485,
+        0.456,
+        0.406
+      ],
+      "std": [
+        0.229,
+        0.224,
+        0.225
+      ]
+    },
+    "mode": "RGB",
+    "entropy": 4.998,
+    "suggested_model": "MobileNet/ResNet"
+  },
+  "augmentation_plan": {
+    "augmentations": [
+      {
+        "name": "RandomHorizontalFlip",
+        "params": {
+          "p": 0.5
+        },
+        "reason": "Common orientation variance; usually safe for many datasets",
+        "score": 0.7
+      }
+    ]
+  },
+  "plots": {
+    "size_hist": "assets/shape_distribution.png",
+    "scatter": "assets/dimension_scatter.png",
+    "channels": "assets/channel_distribution.png"
+  },
+  "samples": {}
+}
