@@ -27,23 +27,31 @@ jobs:
         env:
           KLYNE_API_KEY: ${{ secrets.KLYNE_API_KEY }}
         run: |
-          python - <<EOF
+          python - <<'PY'
           import time, os, sys
+
+          # Print some safe debug info (does not reveal secrets)
           print("PYTHON:", sys.version.splitlines()[0])
           print("ENABLE_ANALYTICS:", os.getenv("ENABLE_ANALYTICS", "1"))
           print("KLYNE_API_KEY present:", bool(os.getenv("KLYNE_API_KEY")))
 
-          import imgshape
-          print("imgshape file:", getattr(imgshape, "__file__", "<unknown>"))
-          print("imgshape version:", getattr(imgshape, "__version__", None))
+          # Import the package (this runs your __init__ hook)
+          try:
+              import imgshape
+              print("imgshape file:", getattr(imgshape, "__file__", "<unknown>"))
+              print("imgshape version:", getattr(imgshape, "__version__", None))
+          except Exception as e:
+              print("imgshape import error:", e)
 
+          # Inspect klyne module (safe introspection)
           try:
               import klyne
-              print("klyne module:", getattr(klyne, "__file__", "<builtin>"))
+              print("klyne module:", getattr(klyne, "__file__", "<builtin/module>"))
               print("klyne has init:", hasattr(klyne, "init"))
               print("klyne has flush:", hasattr(klyne, "flush"))
           except Exception as e:
-              print("klyne import error:", e)
+              print("klyne import/inspect error:", e)
 
+          # allow background sends to run briefly
           time.sleep(3.0)
-          EOF
+          PY
