@@ -1,5 +1,5 @@
 ﻿
-# 🖼️ imgshape — Smart Image Analysis & Preprocessing Toolkit (v2.1.3)
+# 🖼️ imgshape — Smart Image Analysis & Preprocessing Toolkit (v2.1.4)
 
 `imgshape` is a Python toolkit for **image shape detection**, **dataset inspection**, **preprocessing & augmentation recommendations**, **visualization**, **report generation**, and **PyTorch DataLoader helpers** — making it a **smarter dataset assistant** for ML/DL workflows.
 
@@ -87,7 +87,7 @@ print(plan.recommended_order)
 
 ---
 
-## 📝 New in v2.1.3
+## 📝 New in v2.1.4
 
 * 🔄 **Augmentation recommender** (`--augment`, `augmentations.py`)
 * 📝 **Dataset report generator** (`--report`, Markdown/HTML/PDF export)
