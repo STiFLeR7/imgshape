@@ -52,7 +52,7 @@
     ]
   },
   "mode": "RGB",
-  "entropy": 4.998,
+  "entropy": 7.341,
   "suggested_model": "MobileNet/ResNet"
 }
 ```

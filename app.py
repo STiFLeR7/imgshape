@@ -207,3 +207,32 @@ with tabs[4]:
                 st.error(f"Error building Torch transform: {e}")
     else:
         st.info("Upload an image to export Torch transforms.")
+
+# ------------------------- FOOTER -------------------------
+st.markdown("---")
+st.markdown(
+    """
+    <div style="text-align: center;">
+        <p><b>Connect with me</b></p>
+        <a href="https://instagram.com/stifler.xd" target="_blank" style="margin: 0 10px; text-decoration: none;">
+            <img src="https://cdn-icons-png.flaticon.com/512/2111/2111463.png" width="30"/> Instagram
+        </a>
+        <a href="https://github.com/STiFLeR7" target="_blank" style="margin: 0 10px; text-decoration: none;">
+            <img src="https://cdn-icons-png.flaticon.com/512/733/733553.png" width="30"/> GitHub
+        </a>
+        <a href="https://huggingface.co/STiFLeR7" target="_blank" style="margin: 0 10px; text-decoration: none;">
+            <img src="https://huggingface.co/front/assets/huggingface_logo-noborder.svg" width="30"/> HuggingFace
+        </a>
+        <a href="https://medium.com/@stiflerxd" target="_blank" style="margin: 0 10px; text-decoration: none;">
+            <img src="https://cdn-icons-png.flaticon.com/512/5968/5968906.png" width="30"/> Medium
+        </a>
+        <a href="https://www.kaggle.com/stiflerxd" target="_blank" style="margin: 0 10px; text-decoration: none;">
+            <img src="https://cdn-icons-png.flaticon.com/512/2111/2111290.png" width="30"/> Kaggle
+        </a>
+        <br><br>
+        📧 <a href="mailto:hillaniljppatel@gmail.com">hillaniljppatel@gmail.com</a> |
+        🌐 <a href="https://hillpatel.tech" target="_blank">hillpatel.tech</a>
+    </div>
+    """,
+    unsafe_allow_html=True
+)
