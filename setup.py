@@ -5,7 +5,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="imgshape",
-    version="2.1.3",
+    version="2.1.4",
     description="Smart image shape, dataset analysis, preprocessing & augmentation recommendations for ML workflows",
     long_description=long_description,
     long_description_content_type="text/markdown",
