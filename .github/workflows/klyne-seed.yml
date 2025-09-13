@@ -1,6 +1,5 @@
 name: Klyne — Seed telemetry
 
-# Manual trigger so you control when it runs
 on:
   workflow_dispatch:
 
@@ -11,7 +10,7 @@ jobs:
   seed-telemetry:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout (not strictly needed but good hygiene)
+      - name: Checkout
         uses: actions/checkout@v4
 
       - name: Setup Python
@@ -19,40 +18,32 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install wheel/build deps & pip
+      - name: Install pip + imgshape
         run: |
           python -m pip install --upgrade pip setuptools wheel
-
-      - name: Install imgshape release from PyPI
-        run: |
-          pip install --upgrade pip
           pip install imgshape==2.1.4
 
-      - name: Import imgshape (triggers klyne.init()) and debug info
+      - name: Import imgshape (triggers klyne.init)
         env:
-          # Inject your secret stored under repo secrets -> KLYNE_API_KEY
           KLYNE_API_KEY: ${{ secrets.KLYNE_API_KEY }}
         run: |
-          python - <<'PY'
-import time, importlib, os, sys
-# Print some safe debug info (does not reveal secrets)
-print("PYTHON:", sys.version.splitlines()[0])
-print("ENABLE_ANALYTICS:", os.getenv("ENABLE_ANALYTICS", "1"))
-print("KLYNE_API_KEY present:", bool(os.getenv("KLYNE_API_KEY")))
-# Import the package (this runs your __init__ hook)
-import imgshape
-print("imgshape imported from:", getattr(imgshape, "__file__", "<unknown>"))
-print("imgshape.__version__:", getattr(imgshape, "__version__", None))
+          python - <<EOF
+          import time, os, sys
+          print("PYTHON:", sys.version.splitlines()[0])
+          print("ENABLE_ANALYTICS:", os.getenv("ENABLE_ANALYTICS", "1"))
+          print("KLYNE_API_KEY present:", bool(os.getenv("KLYNE_API_KEY")))
 
-# Optional: show klyne module origin & capabilities (safe introspection)
-try:
-    import klyne
-    print("klyne module:", getattr(klyne, "__file__", "<built-in/module>"))
-    print("klyne has init:", hasattr(klyne, "init"))
-    print("klyne has flush:", hasattr(klyne, "flush"))
-except Exception as e:
-    print("klyne import/inspect error:", e)
+          import imgshape
+          print("imgshape file:", getattr(imgshape, "__file__", "<unknown>"))
+          print("imgshape version:", getattr(imgshape, "__version__", None))
 
-# allow background sends to run
-time.sleep(3.0)
-PY
+          try:
+              import klyne
+              print("klyne module:", getattr(klyne, "__file__", "<builtin>"))
+              print("klyne has init:", hasattr(klyne, "init"))
+              print("klyne has flush:", hasattr(klyne, "flush"))
+          except Exception as e:
+              print("klyne import error:", e)
+
+          time.sleep(3.0)
+          EOF
