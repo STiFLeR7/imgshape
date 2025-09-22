@@ -1,31 +1,40 @@
-# Start from slim Python base
+# Dockerfile — run FastAPI service at service/app.py using uvicorn
 FROM python:3.10-slim
 
-# Env vars for Python + Streamlit
+# environment
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    PORT=8080 \
-    STREAMLIT_SERVER_PORT=8080 \
-    STREAMLIT_SERVER_HEADLESS=true
+    PORT=8080
 
-# System deps
+# avoid prompts
+ARG DEBIAN_FRONTEND=noninteractive
+
+# system deps (kept minimal)
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential python3-dev libgl1 libglib2.0-0 \
+    build-essential \
+    gcc \
+    libglib2.0-0 \
+    ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-# Create app dir
 WORKDIR /app
 
-# Copy everything (source + requirements)
-COPY . /app
+# copy package files (requirements + setup)
+COPY pyproject.toml setup.py requirements.txt README.md /app/
 
-# Install dependencies
-RUN pip install --no-cache-dir --upgrade pip setuptools wheel \
-    && pip install --no-cache-dir -r requirements.txt || true \
-    && pip install --no-cache-dir .
+# copy source and service folders
+COPY src/ /app/src/
+COPY service/ /app/service/
 
-# Expose port
+# make sure pip/setuptools are recent
+RUN python -m pip install --upgrade pip setuptools wheel
+
+# install runtime deps: prefer requirements.txt if provided; otherwise install editable package
+RUN if [ -f requirements.txt ]; then pip install --no-cache-dir -r requirements.txt || true; fi \
+    && pip install --no-cache-dir --upgrade .
+
+# expose port used by uvicorn
 EXPOSE 8080
 
-# Run Streamlit
-CMD ["streamlit", "run", "app.py", "--server.port=8080", "--server.headless=true"]
+# Use uvicorn to serve the FastAPI app at service/app.py
+CMD ["uvicorn", "service.app:app", "--host", "0.0.0.0", "--port", "8080", "--timeout-keep-alive", "120"]
