@@ -1,4 +1,4 @@
-# app_streamlit.py — Streamlit front-end (updated & defensive, lazy report imports)
+# app_streamlit.py — Streamlit front-end (defensive imports + graceful degradation)
 import streamlit as st
 from pathlib import Path
 from io import BytesIO
@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 import inspect
 import json
 import logging
+import traceback
 
 from imgshape.shape import get_shape
 from imgshape.analyze import analyze_type
@@ -21,6 +22,18 @@ if not logger.handlers:
     logger.addHandler(ch)
 logger.setLevel(logging.INFO)
 
+# Defensive import of report helpers: they may require optional deps.
+generate_markdown_report = None
+generate_html_report = None
+_generate_import_error = None
+
+try:
+    # Try import; this may raise if report.py top-level imports fail (missing optional deps)
+    from imgshape.report import generate_markdown_report, generate_html_report  # type: ignore
+    logger.info("report module imported successfully")
+except Exception as exc:
+    _generate_import_error = exc
+    logger.exception("Failed to import report helpers: %s", exc)
 
 st.set_page_config(page_title="imgshape v2.2.0", layout="wide")
 st.title("🖼️ imgshape — Smart Dataset Assistant (v2.2.0)")
@@ -38,7 +51,6 @@ uploaded_file = st.sidebar.file_uploader(
 dataset_path = st.sidebar.text_input("Dataset folder path", "assets/sample_images")
 
 tabs = st.tabs(["📐 Shape", "🔍 Analyze", "🧠 Recommend", "📄 Report", "🔗 TorchLoader"])
-
 
 # ------------------------- Helpers -------------------------
 def cache_uploaded_bytes():
@@ -72,10 +84,7 @@ def load_uploaded_image_from_bytes(bytes_data):
 
 
 def safe_analyze_from_bytes_or_pil(bytes_data, pil_img):
-    """
-    Try analyze_type on BytesIO (preferred), else try PIL.Image.
-    Return a dict (either analysis or an error dict).
-    """
+    """Try analyze_type on BytesIO (preferred), else try PIL.Image. Return a dict."""
     last_exc = None
     if bytes_data:
         buf = BytesIO(bytes_data)
@@ -95,10 +104,7 @@ def safe_analyze_from_bytes_or_pil(bytes_data, pil_img):
 
 
 def safe_recommend_from_bytes_or_pil(bytes_data, pil_img, user_prefs=None):
-    """
-    Call recommend_preprocessing with buffer or PIL where possible.
-    Returns recommendation dict or error dict.
-    """
+    """Call recommend_preprocessing with buffer or PIL where possible. Returns dict or error dict."""
     last_exc = None
     if bytes_data:
         buf = BytesIO(bytes_data)
@@ -118,33 +124,25 @@ def safe_recommend_from_bytes_or_pil(bytes_data, pil_img, user_prefs=None):
 
 
 def safe_to_torch_transform(plan_or_config, rec, prefer_snippet: bool = False):
-    """
-    Wrapper that calls to_torch_transform in a backward-compatible way.
-    - If to_torch_transform supports prefer_snippet kw -> use it.
-    - Else try legacy calling style (plan, preprocessing) or (config, rec).
-    - Catch errors and return informative dict {'error':..., 'detail':...}
-    """
+    """Wrapper that tries to call imgshape.torchloader.to_torch_transform in a compatible way."""
     try:
         from imgshape.torchloader import to_torch_transform
     except Exception as e:
         return {"error": "torchloader_missing", "detail": str(e)}
 
     try:
+        import inspect
         sig = inspect.signature(to_torch_transform)
         params = sig.parameters
-        # If prefer_snippet supported as named param, call with it
         if "prefer_snippet" in params:
             try:
                 return to_torch_transform(plan_or_config, rec, prefer_snippet=prefer_snippet)
             except TypeError:
-                # fallback to calling without keyword
                 return to_torch_transform(plan_or_config, rec)
         else:
-            # legacy style: try (plan, preprocessing) -> many tests call this
             try:
                 return to_torch_transform(plan_or_config, rec)
             except TypeError:
-                # try single arg style
                 try:
                     return to_torch_transform(rec)
                 except Exception as e:
@@ -165,7 +163,6 @@ with tabs[0]:
         else:
             st.image(pil_img, caption="Uploaded Image", use_column_width=True)
             try:
-                # prefer passing PIL image to get immediate shape
                 shape = get_shape(pil_img)
                 st.json({"shape": shape})
             except Exception as e:
@@ -181,7 +178,6 @@ with tabs[1]:
     pil_img, buf = load_uploaded_image_from_bytes(bytes_data) if bytes_data else (None, None)
 
     if bytes_data or pil_img:
-        # prefer analyzing from BytesIO so analyze_type can treat it consistently
         res = safe_analyze_from_bytes_or_pil(bytes_data, pil_img)
         if isinstance(res, dict) and res.get("error"):
             st.error(json.dumps(res, indent=2))
@@ -194,12 +190,10 @@ with tabs[1]:
     if st.button("Plot Shape Distribution"):
         try:
             out = plot_shape_distribution(dataset_path, save=False)
-            # plot_shape_distribution shows a plt figure if save=False; we can't reuse it directly here
-            # Instead, we just inform the user of saved path or show a simple message
             if out:
                 st.success(f"Saved plot: {out}")
             else:
-                st.info("Plot created (displayed in server side).")
+                st.info("Plot created (server-side).")
         except Exception as e:
             st.error(f"Error plotting dataset: {e}")
 
@@ -211,7 +205,6 @@ with tabs[2]:
     pil_img, buf = load_uploaded_image_from_bytes(bytes_data) if bytes_data else (None, None)
 
     if bytes_data or pil_img:
-        # user prefs input (left in sidebar)
         user_prefs_input = st.sidebar.text_input("Prefs (comma-separated)", "")
         user_prefs = [p.strip() for p in user_prefs_input.split(",") if p.strip()] if user_prefs_input else None
 
@@ -221,23 +214,22 @@ with tabs[2]:
         else:
             st.json({"preprocessing": rec})
 
-        # Augmentation plan (deterministic heuristic)
         try:
             ar = AugmentationRecommender(seed=42)
-            # create a minimal stats object for the recommender
             analysis = {}
-            # if analyze succeeded earlier, try extracting entropy
             if isinstance(rec, dict) and rec:
-                # some recommenders embed entropy in keys
                 analysis["entropy_mean"] = rec.get("entropy") or rec.get("meta", {}).get("entropy")
             plan = ar.recommend_for_dataset({"entropy_mean": analysis.get("entropy_mean", 5.0), "image_count": 1})
             st.markdown("#### Augmentation plan (heuristic)")
-            # safe representation
-            try:
+            # use as_dict to provide a JSON-friendly representation (robust)
+            if hasattr(plan, "as_dict"):
                 st.json(plan.as_dict())
-            except Exception:
-                # fallback if object doesn't have as_dict
-                st.json({"order": getattr(plan, "recommended_order", []), "augmentations": [a.__dict__ if hasattr(a, "__dict__") else str(a) for a in getattr(plan, "augmentations", [])]})
+            else:
+                # fallback: try dataclass-like mapping
+                try:
+                    st.json({"augmentations": [a.__dict__ for a in plan.augmentations], "order": plan.recommended_order})
+                except Exception:
+                    st.json(str(plan))
         except Exception as e:
             st.error(f"Augmentation generation failed: {e}")
     else:
@@ -247,27 +239,42 @@ with tabs[2]:
 # ------------------------- REPORT TAB -------------------------
 with tabs[3]:
     st.subheader("📄 Dataset Report")
-    if st.button("Generate Markdown + HTML Report"):
-        # Lazy import to avoid import-time crashes if optional deps are missing
-        try:
-            from imgshape.report import generate_markdown_report, generate_html_report
-        except Exception as imp_e:
-            st.error(f"Report generation unavailable: failed to import report module.\nDetail: {imp_e}")
-        else:
+
+    if _generate_import_error:
+        # If the import previously failed, show friendly guidance and the raw traceback for debugging.
+        st.error(
+            "Report generation unavailable: failed to import report module. "
+            "Detail: " + str(_generate_import_error)
+        )
+        with st.expander("Show import traceback (for debugging)"):
+            tb = "".join(traceback.format_exception_only(type(_generate_import_error), _generate_import_error))
+            st.text(tb)
+            # optionally show full traceback from module import attempt (if logged)
+        st.markdown(
+            """
+            **Possible fixes**
+            - If you installed `imgshape` from PyPI, ensure optional extras for reports are installed:
+              `pip install imgshape[pdf]` (or `pip install reportlab weasyprint`).
+            - Ensure the environment is using the same package version that worked on your server.
+            - Check server/container logs for the original import error from `imgshape.report`.
+            """
+        )
+        st.stop()
+
+    # If the functions are available, enable the button
+    if generate_markdown_report is None or generate_html_report is None:
+        st.warning("Report module not available; report button disabled.")
+    else:
+        if st.button("Generate Markdown + HTML Report"):
             try:
                 md_path = Path("report.md")
                 html_path = Path("report.html")
-
-                # prefer using dataset path; if none exists, try creating reports from a sample recommendation
                 generate_markdown_report(dataset_path, str(md_path))
                 generate_html_report(dataset_path, str(html_path))
-
                 st.success("Reports generated!")
                 st.download_button("⬇️ Download Markdown", md_path.read_text(), file_name="report.md")
                 st.download_button("⬇️ Download HTML", html_path.read_text(), file_name="report.html")
             except Exception as e:
-                # Show the exception message (safe) and log full trace
-                logger.exception("Error generating report")
                 st.error(f"Error generating report: {e}")
 
 
@@ -278,14 +285,12 @@ with tabs[4]:
     pil_img, buf = load_uploaded_image_from_bytes(bytes_data) if bytes_data else (None, None)
 
     if bytes_data or pil_img:
-        # Build a representative recommendation (prefers rec if available)
         rec = None
         try:
             rec = safe_recommend_from_bytes_or_pil(bytes_data, pil_img)
         except Exception as e:
             rec = {"error": "recommend_fail", "detail": str(e)}
 
-        # Attempt to produce transform (callable or snippet)
         transform_result = safe_to_torch_transform({}, rec or {}, prefer_snippet=False)
 
         if isinstance(transform_result, str):
@@ -293,12 +298,10 @@ with tabs[4]:
         elif isinstance(transform_result, dict) and transform_result.get("error"):
             st.error(json.dumps(transform_result, indent=2))
         else:
-            # Most likely a Compose-like callable/object
             st.success("✅ torchvision.transforms.Compose (or equivalent) created")
             st.write(transform_result)
     else:
         st.info("Upload an image to export Torch transforms.")
-
 
 # Footer
 st.markdown("---")
@@ -307,20 +310,17 @@ st.markdown(
     <div style="text-align: center;">
         <p><b>Connect with me</b></p>
         <a href="https://instagram.com/stifler.xd" target="_blank" style="margin: 0 10px; text-decoration: none;">
-            <img src="https://cdn-icons-png.flaticon.com/512/2111/2111463.png" width="30"/> Instagram
+            <img src="https://cdn-icons-png.flaticon.com/512/2111/2111463.png" width="20"/> Instagram
         </a>
         <a href="https://github.com/STiFLeR7" target="_blank" style="margin: 0 10px; text-decoration: none;">
-            <img src="https://cdn-icons-png.flaticon.com/512/733/733553.png" width="30"/> GitHub
+            <img src="https://cdn-icons-png.flaticon.com/512/733/733553.png" width="20"/> GitHub
         </a>
         <a href="https://huggingface.co/STiFLeR7" target="_blank" style="margin: 0 10px; text-decoration: none;">
-            <img src="https://huggingface.co/front/assets/huggingface_logo-noborder.svg" width="30"/> HuggingFace
+            <img src="https://huggingface.co/front/assets/huggingface_logo-noborder.svg" width="20"/> HuggingFace
         </a>
         <a href="https://medium.com/@stiflerxd" target="_blank" style="margin: 0 10px; text-decoration: none;">
-            <img src="https://cdn-icons-png.flaticon.com/512/5968/5968906.png" width="30"/> Medium
+            <img src="https://cdn-icons-png.flaticon.com/512/5968/5968906.png" width="20"/> Medium
         </a>
-        <br><br>
-        📧 <a href="mailto:hillaniljppatel@gmail.com">hillaniljppatel@gmail.com</a> |
-        🌐 <a href="https://hillpatel.tech" target="_blank">hillpatel.tech</a>
     </div>
     """,
     unsafe_allow_html=True,
