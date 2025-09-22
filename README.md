@@ -1,11 +1,10 @@
-﻿
-# 🖼️ imgshape — Smart Image Analysis & Preprocessing Toolkit (v2.1.4)
+﻿# 🖼️ imgshape — Smart Image Analysis & Preprocessing Toolkit (v2.2.0)
 
 `imgshape` is a Python toolkit for **image shape detection**, **dataset inspection**, **preprocessing & augmentation recommendations**, **visualization**, **report generation**, and **PyTorch DataLoader helpers** — making it a **smarter dataset assistant** for ML/DL workflows.
 
 ![imgshape demo](assets/sample_images/Image_created_with_a_mobile_phone.png)
-[![PyPI Downloads](https://static.pepy.tech/personalized-badge/imgshape?period=total&units=INTERNATIONAL_SYSTEM&left_color=BLACK&right_color=GREEN&left_text=downloads)](https://pepy.tech/projects/imgshape)
----
+[![PyPI Downloads](https://static.pepy.tech/personalized-badge/imgshape?period=total\&units=INTERNATIONAL_SYSTEM\&left_color=BLACK\&right_color=GREEN\&left_text=downloads)](https://pepy.tech/projects/imgshape)
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 ## ⚡️ Why use `imgshape`?
 
@@ -17,7 +16,10 @@
 * ✅ **Model compatibility checks**: verify dataset readiness for models like `mobilenet_v2`, `resnet18`, etc.
 * 📝 **Dataset reports**: export Markdown/HTML/PDF with stats, plots, preprocessing, and augmentation plans.
 * 🔗 **Torch integration**: generate ready-to-use `torchvision.transforms` or even a `DataLoader`.
-* 🌐 **GUI mode**: run a Gradio app for point-and-click analysis.
+* 🌐 **Interactive GUI modes**:
+
+  * **Streamlit app** (`app_streamlit.py`) → modern multi-tab UI
+  * **Gradio app** (`--web`) → quick prototyping
 
 ---
 
@@ -25,10 +27,10 @@
 
 ```bash
 pip install imgshape
-````
+```
 
 > Requires Python 3.8+
-> Core deps: `Pillow`, `numpy`, `matplotlib`, `scikit-image`, `gradio`
+> Core deps: `Pillow`, `numpy`, `matplotlib`, `scikit-image`, `streamlit`
 > Optional extras:
 >
 > * `imgshape[torch]` → PyTorch / torchvision support
@@ -61,6 +63,9 @@ imgshape --path ./images --report --augment --report-format md,html --out report
 # Torch integration (transform/DataLoader)
 imgshape --path ./images --torchloader --augment --out transform_snippet.py
 
+# Launch Streamlit app
+streamlit run app_streamlit.py
+
 # Launch Gradio GUI
 imgshape --web
 ```
@@ -87,13 +92,37 @@ print(plan.recommended_order)
 
 ---
 
-## 📝 New in v2.1.4
+## 📝 New in v2.2.0
 
-* 🔄 **Augmentation recommender** (`--augment`, `augmentations.py`)
-* 📝 **Dataset report generator** (`--report`, Markdown/HTML/PDF export)
-* 🔗 **TorchLoader integration** (`--torchloader`, `to_dataloader`, `to_torch_transform`)
-* 📊 **Improved visualizations** (works even for 1-image datasets)
-* 🌐 **Modernized GUI** with analysis + recommendations tabs
+* 🌐 **Streamlit App** (`app_streamlit.py`) with **5 interactive tabs**:
+
+  * **Shape** → instant image shape detection
+  * **Analyze** → entropy, channels, and dataset visualization
+  * **Recommend** → preprocessing + heuristic augmentation plan
+  * **Report** → export dataset reports in Markdown/HTML
+  * **TorchLoader** → export `torchvision.transforms` pipelines or snippets
+* 🔗 **TorchLoader**:
+
+  * Safe wrapper for Compose/snippet/no-op callable depending on availability.
+  * Backward compatibility with old `(plan, preprocessing)` test calls.
+* 🧠 **AugmentationRecommender**:
+
+  * Deterministic heuristic plans with `.as_dict()` export.
+  * Handles entropy, resolution, and imbalance.
+* ✅ **Compatibility Fixes**:
+
+  * `check_compatibility()` outputs structured results.
+  * Deprecated alias `check_model_compatibility()` preserved.
+* 📝 **Report Generators**:
+
+  * Markdown + HTML outputs improved.
+* ⚡️ **Test Suite**:
+
+  * Fixed pytest failures in `compatibility`, `report`, and `torchloader`.
+* 🎨 **UI Polishing**:
+
+  * Defensive wrappers for `analyze_type`, `recommend_preprocessing`, TorchLoader.
+  * Footer links to **Instagram, GitHub, HuggingFace, Kaggle, Medium**.
 
 ---
 
@@ -102,6 +131,3 @@ print(plan.recommended_order)
 * [Source Code](https://github.com/STiFLeR7/imgshape)
 * [Issues](https://github.com/STiFLeR7/imgshape/issues)
 * License: MIT
-
-
-
