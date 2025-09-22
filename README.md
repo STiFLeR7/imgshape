@@ -18,7 +18,7 @@
 * 🔗 **Torch integration**: generate ready-to-use `torchvision.transforms` or even a `DataLoader`.
 * 🌐 **Interactive GUI modes**:
 
-  * **Streamlit app** (`app_streamlit.py`) → modern multi-tab UI
+  * **Streamlit app** (`app.py`) → modern multi-tab UI
   * **Gradio app** (`--web`) → quick prototyping
 
 ---
@@ -64,7 +64,7 @@ imgshape --path ./images --report --augment --report-format md,html --out report
 imgshape --path ./images --torchloader --augment --out transform_snippet.py
 
 # Launch Streamlit app
-streamlit run app_streamlit.py
+streamlit run app.py
 
 # Launch Gradio GUI
 imgshape --web
@@ -94,7 +94,7 @@ print(plan.recommended_order)
 
 ## 📝 New in v2.2.0
 
-* 🌐 **Streamlit App** (`app_streamlit.py`) with **5 interactive tabs**:
+* 🌐 **Streamlit App** (`app.py`) with **5 interactive tabs**:
 
   * **Shape** → instant image shape detection
   * **Analyze** → entropy, channels, and dataset visualization
