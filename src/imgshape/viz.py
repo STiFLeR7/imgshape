@@ -1,168 +1,250 @@
 # src/imgshape/viz.py
 """
-Visualization utilities for imgshape v2.1.0
+Visualization utilities for imgshape v2.2.0
 
 Provides histograms, scatter plots, and simple distribution summaries
 for dataset image sizes and shapes.
 
-All functions can display interactively OR save to disk.
+All functions are defensive: they handle empty folders, unreadable files,
+and can either display plots or save them to disk. Functions return the
+output path (if saved) or None when shown interactively. A convenience
+function returns a dict of generated artefacts.
 """
 
+from __future__ import annotations
 import os
-import glob
 from pathlib import Path
 import matplotlib.pyplot as plt
 from collections import Counter
-from typing import List, Dict, Tuple, Optional
+from typing import List, Dict, Tuple, Optional, Union
+import logging
 
 from imgshape.shape import get_shape_batch
+
+logger = logging.getLogger("imgshape.viz")
+if not logger.handlers:
+    ch = logging.StreamHandler()
+    ch.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s"))
+    logger.addHandler(ch)
+logger.setLevel(logging.INFO)
 
 
 # -------------------------------
 # Helpers
 # -------------------------------
 
-def _get_image_paths(folder_path: str) -> List[str]:
-    """Return a list of image file paths from a folder (common extensions only)."""
-    image_extensions = ["*.jpg", "*.jpeg", "*.png", "*.bmp", "*.tiff", "*.gif"]
-    files: List[str] = []
-    for ext in image_extensions:
-        files.extend(glob.glob(os.path.join(folder_path, ext)))
-    return files
+def _ensure_outdir(out_dir: Union[str, Path]) -> Path:
+    p = Path(out_dir)
+    p.mkdir(parents=True, exist_ok=True)
+    return p
 
 
-def _extract_dims(shapes_dict: Dict[str, Tuple[int, int, int]]) -> Tuple[List[int], List[int], List[int]]:
-    """Extract width, height, channels from a dict of {path: (h,w,c)}."""
-    widths, heights, channels = [], [], []
-    for shape in shapes_dict.values():
-        if len(shape) == 3:
-            h, w, c = shape
+def _shapes_from_folder(folder_path: Union[str, Path], recursive: bool = True, include_errors: bool = False):
+    """
+    Wrapper around get_shape_batch which accepts folder path and returns lists of widths, heights, channels.
+    Returns (widths, heights, channels, errors)
+    """
+    p = Path(folder_path)
+    if not p.exists():
+        logger.warning("Folder does not exist: %s", folder_path)
+        return [], [], [], [{"error": "folder_not_found", "path": str(folder_path)}]
+
+    try:
+        shapes = get_shape_batch(str(folder_path), recursive=recursive, include_errors=include_errors)
+    except Exception as e:
+        logger.warning("get_shape_batch failed: %s", e)
+        return [], [], [], [{"error": "shape_batch_failed", "detail": str(e)}]
+
+    widths: List[int] = []
+    heights: List[int] = []
+    channels: List[int] = []
+    errors: List[Dict] = []
+
+    for item in shapes:
+        if isinstance(item, tuple) and len(item) == 3:
+            h, w, c = item
             widths.append(w)
             heights.append(h)
             channels.append(c)
-    return widths, heights, channels
+        elif isinstance(item, dict):
+            errors.append(item)
+
+    return widths, heights, channels, errors
 
 
 # -------------------------------
 # Plot functions
 # -------------------------------
 
-def plot_shape_distribution(folder_path: str, save: bool = False, out_dir: str = "output") -> Optional[str]:
-    image_paths = _get_image_paths(folder_path)
-    shapes_dict = get_shape_batch(image_paths)
+def plot_shape_distribution(
+    folder_path: Union[str, Path],
+    save: bool = False,
+    out_dir: str = "output",
+    figsize: Tuple[int, int] = (10, 4),
+    bins: int = 20,
+    recursive: bool = True,
+) -> Optional[str]:
+    """
+    Plot histogram of width and height distributions for a dataset directory.
 
-    widths, heights, _ = _extract_dims(shapes_dict)
-
-    plt.figure(figsize=(10, 5))
-    if len(widths) == 0 and len(heights) == 0:
-        plt.text(0.5, 0.5, "No images found to plot", ha="center", va="center")
-    else:
-        # Single-sample: draw a visible bar + vertical lines and annotate values
-        if len(widths) == 1 and len(heights) == 1:
-            w, h = widths[0], heights[0]
-            # draw one narrow bar for widths and heights for visual clarity
-            plt.hist([w], bins=1, alpha=0.6, label=f'Width ({w}px)', color="#5DADE2")
-            plt.hist([h], bins=1, alpha=0.6, label=f'Height ({h}px)', color="#F5B041")
-            plt.vlines([w], 0, 1, colors='#21618C', linestyles='--')
-            plt.vlines([h], 0, 1, colors='#B9770E', linestyles=':')
-            plt.ylim(0, 1.2)
+    Returns path if saved, else None (plots interactively).
+    """
+    widths, heights, _, errors = _shapes_from_folder(folder_path, recursive=recursive)
+    if not widths and not heights:
+        logger.info("No images found in %s", folder_path)
+        # Create a tiny empty figure with message
+        fig, ax = plt.subplots(figsize=figsize)
+        ax.text(0.5, 0.5, "No images found to plot", ha="center", va="center", fontsize=12)
+        ax.axis("off")
+        if save:
+            outp = _ensure_outdir(out_dir) / "shape_distribution.png"
+            fig.savefig(outp, dpi=150, bbox_inches="tight")
+            plt.close(fig)
+            return str(outp)
         else:
-            plt.hist(widths, bins=15, alpha=0.6, label='Widths', color="#5DADE2")
-            plt.hist(heights, bins=15, alpha=0.6, label='Heights', color="#F5B041")
+            plt.show()
+            plt.close(fig)
+            return None
 
-    plt.xlabel("Pixels")
-    plt.ylabel("Frequency")
-    plt.title("Image Size Distribution")
-    plt.legend()
+    fig, ax = plt.subplots(figsize=figsize)
+    # If only a single sample, show both as single-bar hist with annotations
+    if len(widths) == 1 and len(heights) == 1:
+        w, h = widths[0], heights[0]
+        ax.bar([0, 1], [1, 1], tick_label=[f"W:{w}px", f"H:{h}px"], color=["#5DADE2", "#F5B041"], alpha=0.8)
+        ax.set_ylabel("Count")
+        ax.set_title("Single-sample Image Shape")
+    else:
+        ax.hist(widths, bins=bins, alpha=0.6, label="Widths (px)")
+        ax.hist(heights, bins=bins, alpha=0.6, label="Heights (px)")
+        ax.set_xlabel("Pixels")
+        ax.set_ylabel("Frequency")
+        ax.set_title("Image Width/Height Distribution")
+        ax.legend()
+
     plt.tight_layout()
-
     if save:
-        os.makedirs(out_dir, exist_ok=True)
-        out_path = os.path.join(out_dir, "shape_distribution.png")
-        plt.savefig(out_path, dpi=150)
-        plt.close()
-        return out_path
+        outp = _ensure_outdir(out_dir) / "shape_distribution.png"
+        fig.savefig(outp, dpi=150, bbox_inches="tight")
+        plt.close(fig)
+        logger.info("Saved shape distribution to %s", outp)
+        return str(outp)
     else:
         plt.show()
-        plt.close()
+        plt.close(fig)
         return None
 
-def plot_image_dimensions(folder_path: str, save: bool = False, out_dir: str = "output") -> Optional[str]:
-    image_paths = _get_image_paths(folder_path)
-    shapes_dict = get_shape_batch(image_paths)
 
-    widths, heights, _ = _extract_dims(shapes_dict)
+def plot_image_dimensions(
+    folder_path: Union[str, Path],
+    save: bool = False,
+    out_dir: str = "output",
+    figsize: Tuple[int, int] = (6, 6),
+    recursive: bool = True,
+) -> Optional[str]:
+    """
+    Scatter plot of image (width, height) pairs. Annotates single samples for clarity.
+    """
+    widths, heights, _, errors = _shapes_from_folder(folder_path, recursive=recursive)
+    fig, ax = plt.subplots(figsize=figsize)
 
-    plt.figure(figsize=(6, 6))
-    if len(widths) == 0:
-        plt.text(0.5, 0.5, "No images found to plot", ha="center", va="center")
+    if not widths:
+        logger.info("No images found in %s", folder_path)
+        ax.text(0.5, 0.5, "No images found to plot", ha="center", va="center", fontsize=12)
+        ax.axis("off")
     elif len(widths) == 1:
         w, h = widths[0], heights[0]
-        plt.scatter([w], [h], s=300, alpha=0.9, edgecolors='black', zorder=3)
-        plt.annotate(f"{w}×{h}", (w, h), textcoords="offset points", xytext=(10,10))
-        # set axis limits with some margin so the point is nicely centered
+        ax.scatter([w], [h], s=300, alpha=0.9, edgecolors="black", zorder=3)
+        ax.annotate(f"{w}×{h}", (w, h), textcoords="offset points", xytext=(10, 10))
         margin = max(100, int(0.05 * max(w, h)))
-        plt.xlim(w - margin, w + margin)
-        plt.ylim(h - margin, h + margin)
+        ax.set_xlim(w - margin, w + margin)
+        ax.set_ylim(h - margin, h + margin)
+        ax.set_xlabel("Width (px)")
+        ax.set_ylabel("Height (px)")
     else:
-        plt.scatter(widths, heights, alpha=0.6, c="#48C9B0", edgecolors='black')
+        ax.scatter(widths, heights, alpha=0.6, c="#48C9B0", edgecolors="black")
+        ax.set_xlabel("Width (px)")
+        ax.set_ylabel("Height (px)")
 
-    plt.xlabel("Width (px)")
-    plt.ylabel("Height (px)")
-    plt.title("Image Dimension Scatter Plot")
-    plt.grid(True, linestyle="--", alpha=0.5)
+    ax.set_title("Image Dimension Scatter Plot")
+    ax.grid(True, linestyle="--", alpha=0.4)
     plt.tight_layout()
 
     if save:
-        os.makedirs(out_dir, exist_ok=True)
-        out_path = os.path.join(out_dir, "dimension_scatter.png")
-        plt.savefig(out_path, dpi=150)
-        plt.close()
-        return out_path
+        outp = _ensure_outdir(out_dir) / "dimension_scatter.png"
+        fig.savefig(outp, dpi=150, bbox_inches="tight")
+        plt.close(fig)
+        logger.info("Saved dimension scatter to %s", outp)
+        return str(outp)
     else:
         plt.show()
-        plt.close()
+        plt.close(fig)
         return None
 
-def plot_channel_distribution(folder_path: str, save: bool = False, out_dir: str = "output") -> Optional[str]:
-    """
-    Bar chart of channel counts (RGB vs Grayscale).
 
-    Returns path if saved, else None.
+def plot_channel_distribution(
+    folder_path: Union[str, Path],
+    save: bool = False,
+    out_dir: str = "output",
+    figsize: Tuple[int, int] = (5, 4),
+    recursive: bool = True,
+) -> Optional[str]:
     """
-    image_paths = _get_image_paths(folder_path)
-    shapes_dict = get_shape_batch(image_paths)
-    _, _, channels = _extract_dims(shapes_dict)
-
+    Bar chart showing counts of channel types (1, 3, 4, ...).
+    """
+    _, _, channels, errors = _shapes_from_folder(folder_path, recursive=recursive)
     counts = Counter(channels)
-    labels, values = list(counts.keys()), list(counts.values())
+    if not counts:
+        logger.info("No channel information found in %s", folder_path)
+        fig, ax = plt.subplots(figsize=figsize)
+        ax.text(0.5, 0.5, "No images found", ha="center", va="center")
+        ax.axis("off")
+        if save:
+            outp = _ensure_outdir(out_dir) / "channel_distribution.png"
+            fig.savefig(outp, dpi=150, bbox_inches="tight")
+            plt.close(fig)
+            return str(outp)
+        else:
+            plt.show()
+            plt.close(fig)
+            return None
 
-    plt.figure(figsize=(5, 4))
-    plt.bar(labels, values, color="#9B59B6", alpha=0.7)
-    plt.xticks(labels, [f"{c} channels" for c in labels])
-    plt.ylabel("Count")
-    plt.title("🌈 Channel Distribution")
+    labels = [f"{k} ch" for k in counts.keys()]
+    values = list(counts.values())
+
+    fig, ax = plt.subplots(figsize=figsize)
+    ax.bar(labels, values, color="#9B59B6", alpha=0.8)
+    ax.set_ylabel("Count")
+    ax.set_title("Channel Distribution")
     plt.tight_layout()
 
     if save:
-        os.makedirs(out_dir, exist_ok=True)
-        out_path = os.path.join(out_dir, "channel_distribution.png")
-        plt.savefig(out_path, dpi=150)
-        plt.close()
-        return out_path
+        outp = _ensure_outdir(out_dir) / "channel_distribution.png"
+        fig.savefig(outp, dpi=150, bbox_inches="tight")
+        plt.close(fig)
+        logger.info("Saved channel distribution to %s", outp)
+        return str(outp)
     else:
         plt.show()
+        plt.close(fig)
         return None
 
 
-def plot_dataset_distribution(folder_path: str, save: bool = False, out_dir: str = "output") -> Dict[str, str]:
+def plot_dataset_distribution(
+    folder_path: Union[str, Path],
+    save: bool = False,
+    out_dir: str = "output",
+    recursive: bool = True,
+) -> Dict[str, Optional[str]]:
     """
     Convenience function: generate all distribution plots (size hist, scatter, channel).
 
-    Returns dict of paths if saved, else empty dict.
+    Returns a dict of saved file paths (if save=True) or None values (if shown interactively).
     """
-    results = {}
-    results["size_hist"] = plot_shape_distribution(folder_path, save=save, out_dir=out_dir)
-    results["scatter"] = plot_image_dimensions(folder_path, save=save, out_dir=out_dir)
-    results["channels"] = plot_channel_distribution(folder_path, save=save, out_dir=out_dir)
-    return {k: v for k, v in results.items() if v}
+    results: Dict[str, Optional[str]] = {}
+    results["size_hist"] = plot_shape_distribution(folder_path, save=save, out_dir=out_dir, recursive=recursive)
+    results["scatter"] = plot_image_dimensions(folder_path, save=save, out_dir=out_dir, recursive=recursive)
+    results["channels"] = plot_channel_distribution(folder_path, save=save, out_dir=out_dir, recursive=recursive)
+    # Remove None entries if saving to disk
+    if save:
+        return {k: v for k, v in results.items() if v}
+    return results

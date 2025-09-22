@@ -1,21 +1,22 @@
 # src/imgshape/__init__.py
 """
-imgshape package public API + optional (safe) Klyne telemetry bootstrap.
+imgshape package public API (v2.2.0) — lazy exports + safe optional telemetry.
 
 Behavior:
-- Telemetry is initialized only when the env var KLYNE_API_KEY is set.
-- Set ENABLE_ANALYTICS=0 or ENABLE_ANALYTICS=false to disable telemetry.
-- The init is wrapped in try/except so imports never fail for users.
+- Avoid importing heavy submodules at import-time.
+- Provide the same top-level names as before via lazy import on attribute access.
+- Telemetry (klyne) is initialized only when env var KLYNE_API_KEY is present.
+- Safe: import-time failures are swallowed so users don't get ImportError when optional deps are missing.
 """
 
+from __future__ import annotations
+
+import importlib
 from importlib import metadata
 import os
+from typing import Any
 
-# --- Public API exports (keep as you had them) ---
-from .augmentations import AugmentationRecommender, AugmentationPlan
-from .report import generate_markdown_report, generate_html_report, generate_pdf_report
-from .torchloader import to_torch_transform, to_dataloader
-
+# Public names we want to expose lazily
 __all__ = [
     "AugmentationRecommender",
     "AugmentationPlan",
@@ -24,21 +25,68 @@ __all__ = [
     "generate_pdf_report",
     "to_torch_transform",
     "to_dataloader",
+    "__version__",
 ]
 
-# --- package version detection (preferred: metadata from installed package) ---
+# --- version resolution (best-effort, non-fatal) ---
 try:
     __version__ = metadata.version("imgshape")
 except Exception:
-    # fallback for dev/editable installs: optional single-source version file
     try:
-        from .version import __version__  # create if you don't have it
+        # fallback if you have a version.py with __version__
+        from .version import __version__  # type: ignore
     except Exception:
         __version__ = "0.0.0"
 
-# --- Safe Klyne analytics init ---
-def _init_klyne():
-    """Initialize klyne if enabled and key present. Absolutely non-fatal."""
+# --- mapping attribute name -> (submodule, attr_name) for lazy import ---
+_lazy_map = {
+    # augmentations
+    "AugmentationRecommender": ("imgshape.augmentations", "AugmentationRecommender"),
+    "AugmentationPlan": ("imgshape.augmentations", "AugmentationPlan"),
+    # reports
+    "generate_markdown_report": ("imgshape.report", "generate_markdown_report"),
+    "generate_html_report": ("imgshape.report", "generate_html_report"),
+    "generate_pdf_report": ("imgshape.report", "generate_pdf_report"),
+    # torchloader
+    "to_torch_transform": ("imgshape.torchloader", "to_torch_transform"),
+    "to_dataloader": ("imgshape.torchloader", "to_dataloader"),
+}
+
+# --- helpers for lazy import ---
+def _lazy_import(name: str):
+    """
+    Import the module + attribute for a public name.
+    Raises AttributeError if not found so __getattr__ can behave correctly.
+    """
+    if name not in _lazy_map:
+        raise AttributeError(f"module '{__name__}' has no attribute '{name}'")
+    mod_name, attr = _lazy_map[name]
+    try:
+        module = importlib.import_module(mod_name)
+        return getattr(module, attr)
+    except Exception as exc:
+        # Wrap and raise AttributeError for nicer UX when attribute is missing
+        raise AttributeError(f"Could not import {attr} from {mod_name}: {exc}") from exc
+
+
+def __getattr__(name: str) -> Any:
+    """
+    Module-level getattr that lazily imports attributes in _lazy_map.
+    This is PEP 562 — supported on Python 3.7+.
+    """
+    return _lazy_import(name)
+
+
+def __dir__() -> list[str]:
+    # Provide nice tab-completion: show lazy names plus regular module attributes
+    return sorted(list(globals().keys()) + list(_lazy_map.keys()))
+
+
+# --- Safe Klyne analytics init (non-fatal) ---
+def _init_klyne() -> None:
+    """
+    Initialize klyne if enabled and key present. Absolutely non-fatal.
+    """
     try:
         # opt-out toggle
         if os.getenv("ENABLE_ANALYTICS", "1").strip().lower() in ("0", "false", "no"):
@@ -46,33 +94,35 @@ def _init_klyne():
 
         api_key = os.getenv("KLYNE_API_KEY")
         if not api_key:
-            # No key -> no telemetry. Keeps package safe and private by default.
+            # No key -> no telemetry.
             return
 
-        import atexit
-        import klyne
+        # Import lazily and guard all errors
+        try:
+            import atexit
+            import klyne  # optional dependency; may not be installed
+        except Exception:
+            return
 
         if hasattr(klyne, "init"):
             try:
                 klyne.init(
                     api_key=api_key,
-                    project="imgshape",            # must exactly match PyPI name
+                    project="imgshape",
                     package_version=__version__,
                 )
             except Exception:
-                # don't crash on any SDK internals
                 return
 
-            # register flush for short-lived scripts
             if hasattr(klyne, "flush"):
                 try:
                     atexit.register(lambda: klyne.flush(timeout=5.0))
                 except Exception:
-                    # ignore atexit failures
                     pass
     except Exception:
-        # never bubble any analytics error to importers
+        # do not propagate any telemetry-related issues
         return
 
-# run it (safe)
+
+# Run telemetry init safely (non-fatal)
 _init_klyne()

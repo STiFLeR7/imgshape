@@ -1,11 +1,20 @@
 # src/imgshape/recommender.py
 """
-Self-contained, robust recommender helpers for imgshape v2.2.0.
+Robust recommender for imgshape v2.2.0
 
-- Deterministic fallbacks
+This file exports:
 - recommend_preprocessing(input_obj, user_prefs=None)
 - recommend_dataset(dataset_input, sample_limit=200, user_prefs=None)
+
+recommend_dataset ALWAYS returns a dict with:
+{
+  "user_prefs": [...],
+  "dataset_summary": { ... },
+  "representative_preprocessing": { ... }
+}
+so downstream report/CLI code will consistently find keys.
 """
+
 from __future__ import annotations
 
 import math
@@ -15,8 +24,6 @@ from typing import Any, Dict, Iterable, List, Optional, Tuple, Mapping
 
 from io import BytesIO
 from PIL import Image
-
-import numpy as np
 from collections import Counter
 
 logger = logging.getLogger("imgshape.recommender")
@@ -27,23 +34,22 @@ if not logger.handlers:
 logger.setLevel(logging.INFO)
 
 
-# -------------------------
 # Helpers
-# -------------------------
 def _open_image_from_input(inp: Any) -> Optional[Image.Image]:
+    """Open various input forms as a PIL.Image (RGB)."""
     if inp is None:
         return None
     try:
         if isinstance(inp, Image.Image):
             return inp.convert("RGB")
     except Exception:
-        logger.debug("Input not PIL.Image", exc_info=True)
+        logger.debug("Not a PIL image object", exc_info=True)
 
     try:
         if isinstance(inp, (bytes, bytearray)):
             return Image.open(BytesIO(inp)).convert("RGB")
     except Exception:
-        logger.debug("Failed opening bytes input as image", exc_info=True)
+        logger.debug("Failed to open bytes", exc_info=True)
 
     try:
         if isinstance(inp, (str, Path)):
@@ -51,7 +57,7 @@ def _open_image_from_input(inp: Any) -> Optional[Image.Image]:
             if p.exists() and p.is_file():
                 return Image.open(p).convert("RGB")
     except Exception:
-        logger.debug("Failed opening path input as image", exc_info=True)
+        logger.debug("Failed to open path", exc_info=True)
 
     try:
         if hasattr(inp, "read"):
@@ -66,7 +72,7 @@ def _open_image_from_input(inp: Any) -> Optional[Image.Image]:
                 data = data.encode("utf-8")
             return Image.open(BytesIO(data)).convert("RGB")
     except Exception:
-        logger.debug("Failed opening file-like input as image", exc_info=True)
+        logger.debug("Failed to open file-like object", exc_info=True)
 
     return None
 
@@ -92,28 +98,25 @@ def _entropy_from_image(pil: Image.Image) -> Optional[float]:
         total = sum(hist)
         if total == 0:
             return 0.0
-        entropy = 0.0
+        ent = 0.0
         for c in hist:
             if c == 0:
                 continue
             p = c / total
-            entropy -= p * math.log2(p)
-        return round(float(entropy), 3)
+            ent -= p * math.log2(p)
+        return round(float(ent), 3)
     except Exception:
         logger.debug("entropy_from_image failed", exc_info=True)
         return None
 
 
-def _defaults_for_channels(channels: int) -> Tuple[List[float], List[float]]:
+def _defaults_for_channels(channels: int):
     if channels == 1:
         return [0.5], [0.5]
     return [0.485, 0.456, 0.406], [0.229, 0.224, 0.225]
 
 
-# -------------------------
-# Preference interpreter
-# -------------------------
-def interpret_prefs(prefs: Optional[List[str]]) -> dict:
+def interpret_prefs(prefs: Optional[List[str]]) -> Dict[str, str]:
     out = {"bias": "neutral"}
     if not prefs:
         return out
@@ -127,13 +130,11 @@ def interpret_prefs(prefs: Optional[List[str]]) -> dict:
     return out
 
 
-# -------------------------
-# Fallbacks
-# -------------------------
+# Deterministic fallbacks
 def _deterministic_fallback_preprocessing(user_prefs: Optional[List[str]] = None) -> Dict[str, Any]:
     return {
         "error": "fallback",
-        "message": "Could not compute recommendation; returning safe conservative defaults.",
+        "message": "Could not compute recommendation; returning safe defaults.",
         "user_prefs": user_prefs or [],
         "bias": interpret_prefs(user_prefs).get("bias", "neutral"),
         "augmentation_plan": {
@@ -154,15 +155,14 @@ def _deterministic_fallback_dataset(user_prefs: Optional[List[str]] = None) -> D
         "message": "Could not analyse dataset; returning fallback summary.",
         "user_prefs": user_prefs or [],
         "dataset_summary": {"image_count": 0, "unique_shapes": {}, "notes": "fallback"},
+        "representative_preprocessing": _deterministic_fallback_preprocessing(user_prefs),
     }
 
 
-# -------------------------
-# Core helpers
-# -------------------------
+# small helpers used by preprocessing recommender
 def _stats_from_pil(pil: Image.Image) -> Dict[str, Any]:
-    stats = {}
     shp = _shape_from_image(pil)
+    stats: Dict[str, Any] = {}
     if shp:
         h, w, c = shp
         stats["avg_width"] = int(w)
@@ -215,14 +215,9 @@ def _generate_augmentation_plan_from_stats(stats: Mapping) -> Dict[str, Any]:
     return plan
 
 
-# -------------------------
 # Public API
-# -------------------------
 def recommend_preprocessing(input_obj: Any, user_prefs: Optional[List[str]] = None) -> Dict[str, Any]:
-    """
-    Suggest preprocessing steps and augmentation plan for a single image input.
-    user_prefs is a list of short strings, e.g. ["fast","small"] or ["quality"].
-    """
+    """Recommend preprocessing for a single image (path/PIL/bytes/file-like)."""
     try:
         pil = _open_image_from_input(input_obj)
         if pil is None:
@@ -240,7 +235,7 @@ def recommend_preprocessing(input_obj: Any, user_prefs: Optional[List[str]] = No
 
         bias = pref_meta.get("bias", "neutral")
 
-        # Bias-influenced choices
+        # bias-influenced sizing
         if bias == "fast":
             if min_side >= 96:
                 size = [96, 96]; method = "bilinear"; suggested_model = "EfficientNet-B0 (fast)"
@@ -260,7 +255,7 @@ def recommend_preprocessing(input_obj: Any, user_prefs: Optional[List[str]] = No
             else:
                 size = [128, 128]; method = "bilinear"; suggested_model = "General-purpose (mid)"
 
-        # tweak augmentation scores slightly by bias
+        # tweak augmentation scores a bit by bias
         if bias == "quality":
             for a in plan["augmentations"]:
                 a["score"] = round(min(1.0, a.get("score", 0.0) + 0.05), 3)
@@ -272,7 +267,7 @@ def recommend_preprocessing(input_obj: Any, user_prefs: Optional[List[str]] = No
         channels = int(stats.get("channels", 3))
         mean, std = _defaults_for_channels(channels)
 
-        out = {
+        return {
             "user_prefs": user_prefs or [],
             "bias": bias,
             "augmentation_plan": plan,
@@ -283,47 +278,53 @@ def recommend_preprocessing(input_obj: Any, user_prefs: Optional[List[str]] = No
             "channels": channels,
             "image_count": stats.get("image_count", 1),
         }
-        return out
     except Exception as exc:
-        logger.exception("Unexpected error in recommend_preprocessing: %s", exc)
+        logger.exception("recommend_preprocessing failed: %s", exc)
         return _deterministic_fallback_preprocessing(user_prefs)
 
 
 def recommend_dataset(dataset_input: Any, sample_limit: int = 200, user_prefs: Optional[List[str]] = None) -> Dict[str, Any]:
     """
-    Lightweight dataset-level recommender. Returns dataset_summary and representative_preprocessing.
+    Dataset-level recommender that ALWAYS returns:
+    { "user_prefs": [...], "dataset_summary": {...}, "representative_preprocessing": {...} }
     """
     try:
+        # build list of candidate image paths
         images: List[Any] = []
         if isinstance(dataset_input, (str, Path)):
-            p = Path(dataset_input)
+            p = Path(dataset_input).expanduser().resolve()
+            logger.info("recommend_dataset: resolved dataset path -> %s", p)
             if not p.exists() or not p.is_dir():
-                logger.warning("recommend_dataset: dataset path invalid or not a dir: %s", dataset_input)
+                logger.warning("recommend_dataset: invalid dataset path: %s", dataset_input)
                 return _deterministic_fallback_dataset(user_prefs)
-            exts = ("*.jpg", "*.jpeg", "*.png", "*.bmp", "*.tif", "*.tiff", "*.webp")
-            paths = []
-            for e in exts:
-                paths.extend(sorted(p.glob(e)))
-            paths = sorted(dict.fromkeys(paths))
-            images = paths[:sample_limit]
+            exts = {".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff", ".webp", ".gif"}
+            for f in sorted(p.rglob("*")):
+                if f.is_file() and f.suffix and f.suffix.lower() in exts:
+                    images.append(f)
         elif isinstance(dataset_input, Iterable):
             images = list(dataset_input)[:sample_limit]
         else:
-            logger.warning("recommend_dataset: unsupported dataset_input type, returning fallback")
+            logger.warning("recommend_dataset: unsupported input type %r", type(dataset_input))
             return _deterministic_fallback_dataset(user_prefs)
 
-        if not images:
-            logger.warning("recommend_dataset: no images found in dataset; returning fallback")
+        sampled_paths_count = len(images)
+        if sampled_paths_count == 0:
+            logger.warning("recommend_dataset: no images found in %s", dataset_input)
             return _deterministic_fallback_dataset(user_prefs)
 
         total = 0
         shape_counter = Counter()
-        entropy_vals = []
+        entropy_vals: List[float] = []
         channels_set = set()
+        unreadable = 0
+        rep = None
 
         for item in images:
+            if total >= sample_limit:
+                break
             pil = _open_image_from_input(item)
             if pil is None:
+                unreadable += 1
                 continue
             total += 1
             shp = _shape_from_image(pil)
@@ -334,9 +335,11 @@ def recommend_dataset(dataset_input: Any, sample_limit: int = 200, user_prefs: O
             ent = _entropy_from_image(pil)
             if ent is not None:
                 entropy_vals.append(ent)
+            if rep is None:
+                rep = pil
 
         if total == 0:
-            logger.warning("recommend_dataset: after scanning, no readable images; returning fallback")
+            logger.warning("recommend_dataset: no readable images after scanning")
             return _deterministic_fallback_dataset(user_prefs)
 
         avg_entropy = round(float(sum(entropy_vals) / len(entropy_vals)), 3) if entropy_vals else None
@@ -350,32 +353,28 @@ def recommend_dataset(dataset_input: Any, sample_limit: int = 200, user_prefs: O
             "most_common_shape_count": most_common_count,
             "avg_entropy": avg_entropy,
             "channels": channels,
+            "unreadable_count": unreadable,
+            "sampled_paths_count": sampled_paths_count,
         }
 
-        rep = None
-        for item in images:
-            rep = _open_image_from_input(item)
-            if rep is not None:
-                break
-
         if rep is None:
-            logger.warning("recommend_dataset: could not open any rep image for deriving preprocessing")
+            logger.warning("recommend_dataset: could not open representative image")
             return _deterministic_fallback_dataset(user_prefs)
 
         pre = recommend_preprocessing(rep, user_prefs=user_prefs)
 
-        out = {
+        return {
             "user_prefs": user_prefs or [],
             "dataset_summary": stats,
             "representative_preprocessing": pre,
         }
-        return out
-
     except Exception as exc:
-        logger.exception("Unexpected error in recommend_dataset: %s", exc)
+        logger.exception("recommend_dataset failed:", exc)
         return _deterministic_fallback_dataset(user_prefs)
 
 
-# -------------------------
-# End
-# -------------------------
+# quick smoke test
+if __name__ == "__main__":
+    import json
+    print("smoke test recommend_dataset on assets/sample_images")
+    print(json.dumps(recommend_dataset("assets/sample_images"), indent=2))

@@ -1,30 +1,29 @@
 # src/imgshape/analyze.py
 """
-Robust analyze module for imgshape v2.2.0
+analyze.py — robust image/dataset analysis for imgshape v2.2.0
 
 Provides:
-- analyze_type(input_obj): analyze a single image-like input and return stats/detection.
+- analyze_type(input_obj): analyze a single image-like input and return stats/suggestions.
 - analyze_dataset(dataset_path_or_iterable, sample_limit=200): scan a dataset and return aggregated stats.
 
 Input types supported:
 - PIL.Image.Image
-- str / pathlib.Path (path to file)
+- str / pathlib.Path (path to file or directory)
 - bytes / bytearray
 - file-like object (has .read())
-- URL strings (http/https) only if allow_network=True
-Returns a dict. On error returns {"error": "..."}.
-"""
-from __future__ import annotations
+- URL strings (http/https) if allow_network=True
 
-import logging
+Returns a dict. On error, always returns {"error": "..."}.
+"""
+
+from __future__ import annotations
+import logging, math
 from typing import Any, Dict, Optional, Iterable, List
 from pathlib import Path
 from io import BytesIO
-
-from PIL import Image, UnidentifiedImageError, ImageStat
-
-import math
 from collections import Counter
+
+from PIL import Image, ImageStat
 
 logger = logging.getLogger("imgshape.analyze")
 if not logger.handlers:
@@ -34,54 +33,43 @@ if not logger.handlers:
 logger.setLevel(logging.INFO)
 
 
-# ---- helpers: open and normalize inputs ----
+# ----------------------
+# Input handling helpers
+# ----------------------
 def _open_image_from_input(inp: Any, allow_network: bool = False) -> Optional[Image.Image]:
-    """
-    Robustly open a PIL.Image from a variety of inputs:
-      - PIL.Image.Image -> return .convert("RGB")
-      - bytes / bytearray -> BytesIO -> PIL
-      - str / Path -> file path -> PIL if exists (NETWORK ops disabled by default)
-      - file-like (has read) -> read bytes -> PIL
-    Returns None if it cannot be opened.
-    """
+    """Robustly open a PIL.Image from a variety of inputs."""
     if inp is None:
         return None
 
-    # If already a PIL image, just convert and return
     try:
         if isinstance(inp, Image.Image):
             return inp.convert("RGB")
     except Exception:
-        logger.debug("Input is not PIL.Image or conversion failed", exc_info=True)
+        logger.debug("Not a PIL.Image", exc_info=True)
 
-    # Bytes-like
     try:
         if isinstance(inp, (bytes, bytearray)):
             return Image.open(BytesIO(inp)).convert("RGB")
     except Exception:
-        logger.debug("Failed to open bytes input as image", exc_info=True)
+        logger.debug("Failed opening bytes", exc_info=True)
 
-    # Path-like (string or Path)
     try:
         if isinstance(inp, (str, Path)):
             s = str(inp)
             p = Path(s)
             if p.exists() and p.is_file():
                 return Image.open(p).convert("RGB")
-            # If it's a URL and network allowed, fetch it (disabled by default)
             if (s.startswith("http://") or s.startswith("https://")) and allow_network:
                 try:
                     import requests
-
                     r = requests.get(s, timeout=5)
                     r.raise_for_status()
                     return Image.open(BytesIO(r.content)).convert("RGB")
                 except Exception:
-                    logger.debug("Failed to fetch URL image", exc_info=True)
+                    logger.debug("Failed fetching URL", exc_info=True)
     except Exception:
-        logger.debug("Failed to handle string/path input", exc_info=True)
+        logger.debug("Path/URL handling failed", exc_info=True)
 
-    # File-like objects (e.g., Gradio file object may present differently)
     try:
         if hasattr(inp, "read"):
             try:
@@ -101,17 +89,15 @@ def _open_image_from_input(inp: Any, allow_network: bool = False) -> Optional[Im
                     except Exception:
                         pass
             except Exception:
-                logger.debug("Error reading file-like object in _open_image_from_input", exc_info=True)
+                logger.debug("File-like read failed", exc_info=True)
     except Exception:
-        logger.debug("Input does not support read()", exc_info=True)
+        logger.debug("Object not readable", exc_info=True)
 
     return None
 
 
-def _safe_mode_and_channels(pil: Image.Image) -> Dict[str, Any]:
-    """
-    Return small dict describing mode, channels, size and basic stats.
-    """
+def _safe_meta(pil: Image.Image) -> Dict[str, Any]:
+    """Extract width, height, channels, mode, means, stddev from an image safely."""
     try:
         w, h = pil.size
         bands = pil.getbands() or ()
@@ -122,8 +108,7 @@ def _safe_mode_and_channels(pil: Image.Image) -> Dict[str, Any]:
             means = stat.mean if hasattr(stat, "mean") else []
             stddev = stat.stddev if hasattr(stat, "stddev") else []
         except Exception:
-            means = []
-            stddev = []
+            means, stddev = [], []
         return {
             "width": int(w),
             "height": int(h),
@@ -133,12 +118,12 @@ def _safe_mode_and_channels(pil: Image.Image) -> Dict[str, Any]:
             "stddev": [float(x) for x in stddev] if stddev else [],
         }
     except Exception:
-        logger.debug("_safe_mode_and_channels failed", exc_info=True)
+        logger.debug("_safe_meta failed", exc_info=True)
         return {}
 
 
 def _entropy_from_image(pil: Image.Image) -> Optional[float]:
-    """Shannon entropy computed on grayscale histogram; robust to exceptions."""
+    """Compute Shannon entropy on grayscale histogram."""
     if pil is None:
         return None
     try:
@@ -147,101 +132,87 @@ def _entropy_from_image(pil: Image.Image) -> Optional[float]:
         total = sum(hist)
         if total == 0:
             return 0.0
-        ent = 0.0
-        for c in hist:
-            if c == 0:
-                continue
-            p = c / total
-            ent -= p * math.log2(p)
+        ent = -sum((c / total) * math.log2(c / total) for c in hist if c > 0)
         return round(float(ent), 3)
     except Exception:
         logger.debug("entropy computation failed", exc_info=True)
         return None
 
 
-# ---- Public single-image analyzer ----
+# ----------------------
+# Public analyzers
+# ----------------------
 def analyze_type(input_obj: Any, allow_network: bool = False) -> Dict[str, Any]:
     """
-    Analyze a single image-like input and return a dict with:
+    Analyze a single image-like input and return dict with:
       - meta (width, height, channels, mode, means, stddev)
       - entropy
       - suggestions (size/model)
-    Always returns a dict — on failure returns {'error': '...'}.
     """
     try:
         pil = _open_image_from_input(input_obj, allow_network=allow_network)
         if pil is None:
-            return {"error": "Unsupported input for analyze_type. Provide path, PIL.Image, bytes, or file-like."}
+            return {"error": "Unsupported input for analyze_type"}
 
-        meta = _safe_mode_and_channels(pil)
-        entropy = _entropy_from_image(pil)
-        meta["entropy"] = entropy
+        meta = _safe_meta(pil)
+        ent = _entropy_from_image(pil)
+        meta["entropy"] = ent
 
-        suggestions = {}
-        if meta.get("channels", 3) == 1:
-            suggestions["mode"] = "grayscale"
-        else:
-            suggestions["mode"] = "rgb"
+        suggestions: Dict[str, Any] = {}
+        suggestions["mode"] = "grayscale" if meta.get("channels", 3) == 1 else "rgb"
 
-        w = meta.get("width")
-        h = meta.get("height")
+        w, h = meta.get("width"), meta.get("height")
         if w and h:
-            min_side = min(int(w), int(h))
+            min_side = min(w, h)
             if min_side >= 224:
-                suggestions["suggested_size"] = [224, 224]
-                suggestions["suggested_model"] = "ResNet/MobileNet"
+                suggestions.update({"suggested_size": [224, 224], "suggested_model": "ResNet/MobileNet"})
             elif min_side >= 96:
-                suggestions["suggested_size"] = [96, 96]
-                suggestions["suggested_model"] = "EfficientNet-B0 / MobileNetV2"
+                suggestions.update({"suggested_size": [96, 96], "suggested_model": "EfficientNet-B0 / MobileNetV2"})
             else:
-                suggestions["suggested_size"] = [32, 32]
-                suggestions["suggested_model"] = "TinyNet/CIFAR-style"
+                suggestions.update({"suggested_size": [32, 32], "suggested_model": "TinyNet/CIFAR-style"})
         else:
-            suggestions["suggested_size"] = [128, 128]
-            suggestions["suggested_model"] = "General-purpose"
+            suggestions.update({"suggested_size": [128, 128], "suggested_model": "General-purpose"})
 
-        result = {"meta": meta, "suggestions": suggestions}
-        return result
+        return {"meta": meta, "entropy": ent, "suggestions": suggestions}
     except Exception as exc:
         logger.exception("Unexpected error in analyze_type: %s", exc)
         return {"error": "Internal analyzer failure", "detail": str(exc)}
 
 
-# ---- Public dataset analyzer ----
 def analyze_dataset(dataset_input: Any, sample_limit: int = 200) -> Dict[str, Any]:
     """
     Analyze a dataset (directory path or iterable of image-like objects).
-    Returns aggregated statistics.
+    Returns aggregated stats including counts, entropy, shapes, channels.
     """
     try:
         items: List[Any] = []
         if isinstance(dataset_input, (str, Path)):
-            p = Path(dataset_input)
+            p = Path(dataset_input).expanduser().resolve()
             if not p.exists() or not p.is_dir():
-                return {"error": "Dataset path invalid or not a directory."}
-            exts = ("*.jpg", "*.jpeg", "*.png", "*.bmp", "*.tif", "*.tiff", "*.webp")
-            paths = []
-            for e in exts:
-                paths.extend(sorted(p.glob(e)))
-            paths = sorted(dict.fromkeys(paths))
-            items = paths[: sample_limit]
+                return {"error": f"Dataset path invalid: {dataset_input}"}
+            exts = {".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff", ".webp", ".gif"}
+            for f in sorted(p.rglob("*")):
+                if f.is_file() and f.suffix.lower() in exts:
+                    items.append(f)
+            items = items[:sample_limit]
         elif isinstance(dataset_input, Iterable):
             items = list(dataset_input)[:sample_limit]
         else:
-            return {"error": "Unsupported dataset input. Provide path or iterable of images."}
+            return {"error": "Unsupported dataset input type"}
 
         if not items:
-            return {"error": "No images found in dataset."}
+            return {"error": "No images found in dataset"}
 
         image_count = 0
-        shape_counter = Counter()
-        entropy_values = []
-        channels_counter = Counter()
-        sample_summaries = []
+        shape_counter, channels_counter = Counter(), Counter()
+        entropy_vals: List[float] = []
+        sample_summaries: List[Dict[str, Any]] = []
+        unreadable = 0
 
         for it in items:
             pil = _open_image_from_input(it)
             if pil is None:
+                unreadable += 1
                 continue
             image_count += 1
             w, h = pil.size
@@ -249,24 +220,27 @@ def analyze_dataset(dataset_input: Any, sample_limit: int = 200) -> Dict[str, An
             channels_counter[len(pil.getbands())] += 1
             ent = _entropy_from_image(pil)
             if ent is not None:
-                entropy_values.append(ent)
+                entropy_vals.append(ent)
             if len(sample_summaries) < 5:
-                summ = analyze_type(pil)
-                sample_summaries.append(summ)
+                sample_summaries.append(analyze_type(pil))
 
         if image_count == 0:
-            return {"error": "No readable images in dataset."}
+            return {"error": "No readable images in dataset"}
 
-        avg_entropy = round(float(sum(entropy_values) / len(entropy_values)), 3) if entropy_values else None
+        avg_entropy = round(sum(entropy_vals) / len(entropy_vals), 3) if entropy_vals else None
+        most_common_shape, most_common_count = shape_counter.most_common(1)[0] if shape_counter else (None, 0)
 
-        out = {
+        return {
             "image_count": image_count,
             "unique_shapes": dict(shape_counter),
+            "most_common_shape": most_common_shape,
+            "most_common_shape_count": most_common_count,
             "channels_distribution": dict(channels_counter),
             "avg_entropy": avg_entropy,
             "sample_summaries": sample_summaries,
+            "unreadable_count": unreadable,
+            "sampled_paths_count": len(items),
         }
-        return out
     except Exception as exc:
         logger.exception("Unexpected error in analyze_dataset: %s", exc)
         return {"error": "Internal dataset analyzer failure", "detail": str(exc)}
