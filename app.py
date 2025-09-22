@@ -1,4 +1,4 @@
-# app_streamlit.py — Streamlit front-end (updated & defensive)
+# app_streamlit.py — Streamlit front-end (updated & defensive, lazy report imports)
 import streamlit as st
 from pathlib import Path
 from io import BytesIO
@@ -7,13 +7,11 @@ import matplotlib.pyplot as plt
 import inspect
 import json
 import logging
-import importlib
 
 from imgshape.shape import get_shape
 from imgshape.analyze import analyze_type
 from imgshape.recommender import recommend_preprocessing
 from imgshape.augmentations import AugmentationRecommender
-from imgshape.report import generate_markdown_report, generate_html_report
 from imgshape.viz import plot_shape_distribution
 
 logger = logging.getLogger("imgshape.streamlit")
@@ -22,6 +20,7 @@ if not logger.handlers:
     ch.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s"))
     logger.addHandler(ch)
 logger.setLevel(logging.INFO)
+
 
 st.set_page_config(page_title="imgshape v2.2.0", layout="wide")
 st.title("🖼️ imgshape — Smart Dataset Assistant (v2.2.0)")
@@ -97,46 +96,24 @@ def safe_analyze_from_bytes_or_pil(bytes_data, pil_img):
 
 def safe_recommend_from_bytes_or_pil(bytes_data, pil_img, user_prefs=None):
     """
-    Call recommend_preprocessing defensively:
-      - If recommend_preprocessing accepts user_prefs, pass it.
-      - Else call with single arg (buffer or PIL).
+    Call recommend_preprocessing with buffer or PIL where possible.
     Returns recommendation dict or error dict.
     """
     last_exc = None
-    if recommend_preprocessing is None:
-        return {"error": "recommender_missing", "detail": "recommend_preprocessing not available"}
-
-    # Inspect signature to decide whether to pass user_prefs
-    try:
-        sig = inspect.signature(recommend_preprocessing)
-        accepts_user_prefs = "user_prefs" in sig.parameters
-    except Exception:
-        accepts_user_prefs = False
-
-    # Try bytes (preferred)
     if bytes_data:
         buf = BytesIO(bytes_data)
         try:
             buf.seek(0)
-            if accepts_user_prefs and user_prefs is not None:
-                return recommend_preprocessing(buf, user_prefs=user_prefs)
-            else:
-                return recommend_preprocessing(buf)
+            return recommend_preprocessing(buf, user_prefs=user_prefs)
         except Exception as e:
             last_exc = e
             logger.debug("recommend_preprocessing(bytes) failed: %s", e, exc_info=True)
-
-    # Try PIL
     if pil_img is not None:
         try:
-            if accepts_user_prefs and user_prefs is not None:
-                return recommend_preprocessing(pil_img, user_prefs=user_prefs)
-            else:
-                return recommend_preprocessing(pil_img)
+            return recommend_preprocessing(pil_img, user_prefs=user_prefs)
         except Exception as e:
             last_exc = e
             logger.debug("recommend_preprocessing(PIL) failed: %s", e, exc_info=True)
-
     return {"error": "recommend_failed", "detail": str(last_exc) if last_exc else "no input"}
 
 
@@ -217,10 +194,12 @@ with tabs[1]:
     if st.button("Plot Shape Distribution"):
         try:
             out = plot_shape_distribution(dataset_path, save=False)
+            # plot_shape_distribution shows a plt figure if save=False; we can't reuse it directly here
+            # Instead, we just inform the user of saved path or show a simple message
             if out:
                 st.success(f"Saved plot: {out}")
             else:
-                st.info("Plot created (displayed on server side).")
+                st.info("Plot created (displayed in server side).")
         except Exception as e:
             st.error(f"Error plotting dataset: {e}")
 
@@ -247,22 +226,18 @@ with tabs[2]:
             ar = AugmentationRecommender(seed=42)
             # create a minimal stats object for the recommender
             analysis = {}
+            # if analyze succeeded earlier, try extracting entropy
             if isinstance(rec, dict) and rec:
-                analysis["entropy_mean"] = rec.get("entropy") or rec.get("meta", {}).get("entropy") or rec.get("entropy_mean")
+                # some recommenders embed entropy in keys
+                analysis["entropy_mean"] = rec.get("entropy") or rec.get("meta", {}).get("entropy")
             plan = ar.recommend_for_dataset({"entropy_mean": analysis.get("entropy_mean", 5.0), "image_count": 1})
-
-            # Build a safe dict for UI display (don't rely on plan.as_dict existing)
-            try:
-                plan_dict = plan.as_dict()  # preferred if available
-            except Exception:
-                plan_dict = {
-                    "order": getattr(plan, "recommended_order", []),
-                    "augmentations": [a.__dict__ if hasattr(a, "__dict__") else dict(a) for a in getattr(plan, "augmentations", [])],
-                    "seed": getattr(plan, "seed", None),
-                }
-
             st.markdown("#### Augmentation plan (heuristic)")
-            st.json(plan_dict)
+            # safe representation
+            try:
+                st.json(plan.as_dict())
+            except Exception:
+                # fallback if object doesn't have as_dict
+                st.json({"order": getattr(plan, "recommended_order", []), "augmentations": [a.__dict__ if hasattr(a, "__dict__") else str(a) for a in getattr(plan, "augmentations", [])]})
         except Exception as e:
             st.error(f"Augmentation generation failed: {e}")
     else:
@@ -273,19 +248,27 @@ with tabs[2]:
 with tabs[3]:
     st.subheader("📄 Dataset Report")
     if st.button("Generate Markdown + HTML Report"):
+        # Lazy import to avoid import-time crashes if optional deps are missing
         try:
-            md_path = Path("report.md")
-            html_path = Path("report.html")
+            from imgshape.report import generate_markdown_report, generate_html_report
+        except Exception as imp_e:
+            st.error(f"Report generation unavailable: failed to import report module.\nDetail: {imp_e}")
+        else:
+            try:
+                md_path = Path("report.md")
+                html_path = Path("report.html")
 
-            # prefer using dataset path; if none exists, try creating reports from a sample recommendation
-            generate_markdown_report(dataset_path, str(md_path))
-            generate_html_report(dataset_path, str(html_path))
+                # prefer using dataset path; if none exists, try creating reports from a sample recommendation
+                generate_markdown_report(dataset_path, str(md_path))
+                generate_html_report(dataset_path, str(html_path))
 
-            st.success("Reports generated!")
-            st.download_button("⬇️ Download Markdown", md_path.read_text(), file_name="report.md")
-            st.download_button("⬇️ Download HTML", html_path.read_text(), file_name="report.html")
-        except Exception as e:
-            st.error(f"Error generating report: {e}")
+                st.success("Reports generated!")
+                st.download_button("⬇️ Download Markdown", md_path.read_text(), file_name="report.md")
+                st.download_button("⬇️ Download HTML", html_path.read_text(), file_name="report.html")
+            except Exception as e:
+                # Show the exception message (safe) and log full trace
+                logger.exception("Error generating report")
+                st.error(f"Error generating report: {e}")
 
 
 # ------------------------- TORCHLOADER TAB -------------------------
@@ -324,17 +307,20 @@ st.markdown(
     <div style="text-align: center;">
         <p><b>Connect with me</b></p>
         <a href="https://instagram.com/stifler.xd" target="_blank" style="margin: 0 10px; text-decoration: none;">
-            <img src="https://cdn-icons-png.flaticon.com/512/2111/2111463.png" width="24"/> Instagram
+            <img src="https://cdn-icons-png.flaticon.com/512/2111/2111463.png" width="30"/> Instagram
         </a>
         <a href="https://github.com/STiFLeR7" target="_blank" style="margin: 0 10px; text-decoration: none;">
-            <img src="https://cdn-icons-png.flaticon.com/512/733/733553.png" width="24"/> GitHub
+            <img src="https://cdn-icons-png.flaticon.com/512/733/733553.png" width="30"/> GitHub
         </a>
         <a href="https://huggingface.co/STiFLeR7" target="_blank" style="margin: 0 10px; text-decoration: none;">
-            <img src="https://huggingface.co/front/assets/huggingface_logo-noborder.svg" width="24"/> HuggingFace
+            <img src="https://huggingface.co/front/assets/huggingface_logo-noborder.svg" width="30"/> HuggingFace
         </a>
         <a href="https://medium.com/@stiflerxd" target="_blank" style="margin: 0 10px; text-decoration: none;">
-            <img src="https://cdn-icons-png.flaticon.com/512/5968/5968906.png" width="24"/> Medium
+            <img src="https://cdn-icons-png.flaticon.com/512/5968/5968906.png" width="30"/> Medium
         </a>
+        <br><br>
+        📧 <a href="mailto:hillaniljppatel@gmail.com">hillaniljppatel@gmail.com</a> |
+        🌐 <a href="https://hillpatel.tech" target="_blank">hillpatel.tech</a>
     </div>
     """,
     unsafe_allow_html=True,
