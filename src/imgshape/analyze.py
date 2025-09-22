@@ -2,24 +2,16 @@
 """
 analyze.py — robust image/dataset analysis for imgshape v2.2.0
 
-Provides:
-- analyze_type(input_obj): analyze a single image-like input and return stats/suggestions.
-- analyze_dataset(dataset_path_or_iterable, sample_limit=200): scan a dataset and return aggregated stats.
-
-Input types supported:
-- PIL.Image.Image
-- str / pathlib.Path (path to file or directory)
-- bytes / bytearray
-- file-like object (has .read())
-- URL strings (http/https) if allow_network=True
-
-Returns a dict. On error, always returns {"error": "..."}.
+Robust opening of images (paths, bytes, file-like, URLs if allowed),
+per-image analysis (meta, entropy, suggestions, guess_type) and
+dataset aggregation (analyze_dataset).
 """
 
 from __future__ import annotations
+
 import logging
 import math
-from typing import Any, Dict, Optional, Iterable, List
+from typing import Any, Dict, Optional, Iterable, List, Tuple
 from pathlib import Path
 from io import BytesIO
 from collections import Counter
@@ -35,103 +27,156 @@ logger.setLevel(logging.INFO)
 
 
 # ----------------------
-# Input handling helpers
+# Helpers: robustly open images
 # ----------------------
-def _open_image_from_input(inp: Any, allow_network: bool = False) -> Optional[Image.Image]:
-    """Robustly open a PIL.Image from a variety of inputs.
+def _open_image_from_path(path: Path) -> Optional[Image.Image]:
+    """Try to open a path with PIL.Image.open(path). Convert to RGB if possible."""
+    try:
+        if not path.exists() or not path.is_file():
+            return None
+        # Use PIL open directly (avoid some file-like quirks)
+        img = Image.open(path)
+        try:
+            return img.convert("RGB")
+        except Exception:
+            return img
+    except UnidentifiedImageError:
+        logger.debug("PIL could not identify image: %s", path)
+        return None
+    except Exception:
+        logger.debug("Failed opening path %s", path, exc_info=True)
+        return None
 
-    Resolves strings through multiple strategies so relative paths in test/CI are handled.
+
+def _open_image_from_bytes(data: bytes) -> Optional[Image.Image]:
+    try:
+        img = Image.open(BytesIO(data))
+        try:
+            return img.convert("RGB")
+        except Exception:
+            return img
+    except UnidentifiedImageError:
+        return None
+    except Exception:
+        logger.debug("Failed opening image from bytes", exc_info=True)
+        return None
+
+
+def _string_candidates(s: str) -> List[Path]:
     """
+    Create prioritized candidate paths from the provided string.
+    Order:
+      1. Exact path as given
+      2. expanduser()
+      3. cwd / s
+      4. package repo-root relative (two levels up from this file)
+      5. assets/ + s next to package
+      6. ascend parents from cwd (small depth)
+    """
+    candidates: List[Path] = []
+    try:
+        p = Path(s)
+    except Exception:
+        p = None
+
+    if p is not None:
+        candidates.append(p)
+        try:
+            candidates.append(p.expanduser())
+        except Exception:
+            pass
+
+    try:
+        candidates.append(Path.cwd() / s)
+    except Exception:
+        pass
+
+    # repo root (two levels up from src/imgshape)
+    try:
+        repo_root = Path(__file__).resolve().parents[2]
+        candidates.append(repo_root / s)
+    except Exception:
+        pass
+
+    # package assets folder
+    try:
+        pkg_assets = Path(__file__).resolve().parents[1] / "assets" / s
+        candidates.append(pkg_assets)
+    except Exception:
+        pass
+
+    # try climb up from cwd (helpful for tests running in tmpdir)
+    try:
+        cur = Path.cwd()
+        for _ in range(4):
+            candidates.append(cur / s)
+            cur = cur.parent
+    except Exception:
+        pass
+
+    # Deduplicate while preserving order
+    seen = set()
+    out: List[Path] = []
+    for c in candidates:
+        try:
+            key = str(c.resolve(strict=False))
+        except Exception:
+            key = str(c)
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(c)
+    return out
+
+
+def _open_image_from_input(inp: Any, allow_network: bool = False) -> Optional[Image.Image]:
+    """Open image from PIL.Image, bytes, file-like, path string, or Path."""
     if inp is None:
         return None
 
-    # Already a PIL image
+    # PIL image
     try:
         if isinstance(inp, Image.Image):
-            return inp.convert("RGB")
+            try:
+                return inp.convert("RGB")
+            except Exception:
+                return inp
     except Exception:
-        logger.debug("Not a PIL.Image", exc_info=True)
+        logger.debug("Not a PIL image", exc_info=True)
 
-    # Raw bytes / bytearray
+    # bytes-like
     try:
         if isinstance(inp, (bytes, bytearray)):
-            return Image.open(BytesIO(inp)).convert("RGB")
+            return _open_image_from_bytes(bytes(inp))
     except Exception:
-        logger.debug("Failed opening bytes", exc_info=True)
+        logger.debug("Not bytes", exc_info=True)
 
-    # Path-like or string: attempt a few fallbacks
+    # Path-like / string
     try:
         if isinstance(inp, (str, Path)):
             s = str(inp)
-            candidates = []
-
-            # 1) direct path
-            candidates.append(Path(s))
-
-            # 2) cwd relative
-            try:
-                candidates.append(Path.cwd() / s)
-            except Exception:
-                pass
-
-            # 3) repo relative: two levels up from this file (src/imgshape -> repo root)
-            try:
-                repo_root = Path(__file__).resolve().parents[2]
-                candidates.append(repo_root / s)
-            except Exception:
-                pass
-
-            # 4) common assets folder sibling to package
-            try:
-                pkg_assets = Path(__file__).resolve().parents[1] / "assets" / s
-                candidates.append(pkg_assets)
-            except Exception:
-                pass
-
-            # 5) try progressively moving up parent directories for relative paths
-            try:
-                p = Path(s)
-                if not p.is_absolute():
-                    curr = Path.cwd()
-                    for _ in range(4):
-                        candidates.append(curr / s)
-                        curr = curr.parent
-            except Exception:
-                pass
-
-            # Deduplicate and try
-            seen = set()
-            for cand in candidates:
-                try:
-                    candp = Path(cand)
-                    if str(candp) in seen:
-                        continue
-                    seen.add(str(candp))
-                    if candp.exists() and candp.is_file():
-                        try:
-                            return Image.open(candp).convert("RGB")
-                        except UnidentifiedImageError:
-                            logger.debug("File exists but is not an image: %s", candp)
-                            return None
-                        except Exception:
-                            logger.debug("Failed opening image at candidate: %s", candp, exc_info=True)
-                            continue
-                except Exception:
-                    logger.debug("Candidate evaluation failed for: %s", cand, exc_info=True)
-            # Network fetch (optional)
+            # Network fetch if allowed
             if (s.startswith("http://") or s.startswith("https://")) and allow_network:
                 try:
                     import requests
 
                     r = requests.get(s, timeout=8)
                     r.raise_for_status()
-                    return Image.open(BytesIO(r.content)).convert("RGB")
+                    return _open_image_from_bytes(r.content)
                 except Exception:
-                    logger.debug("Failed fetching URL: %s", s, exc_info=True)
-    except Exception:
-        logger.debug("Path/URL handling failed", exc_info=True)
+                    logger.debug("Failed to fetch URL %s", s, exc_info=True)
 
-    # File-like objects (has .read)
+            # Try candidate file paths
+            candidates = _string_candidates(s)
+            logger.debug("Trying candidates for %s -> %s", s, candidates)
+            for cand in candidates:
+                img = _open_image_from_path(cand)
+                if img is not None:
+                    return img
+    except Exception:
+        logger.debug("String/Path handling failed", exc_info=True)
+
+    # file-like readable (has read)
     try:
         if hasattr(inp, "read"):
             try:
@@ -144,7 +189,7 @@ def _open_image_from_input(inp: Any, allow_network: bool = False) -> Optional[Im
                 if data:
                     if isinstance(data, str):
                         data = data.encode("utf-8")
-                    return Image.open(BytesIO(data)).convert("RGB")
+                    return _open_image_from_bytes(data)
                 if pos is not None:
                     try:
                         inp.seek(pos)
@@ -153,13 +198,15 @@ def _open_image_from_input(inp: Any, allow_network: bool = False) -> Optional[Im
             except Exception:
                 logger.debug("File-like read failed", exc_info=True)
     except Exception:
-        logger.debug("Object not readable", exc_info=True)
+        logger.debug("Input is not file-like", exc_info=True)
 
     return None
 
 
+# ----------------------
+# Analysis helpers
+# ----------------------
 def _safe_meta(pil: Image.Image) -> Dict[str, Any]:
-    """Extract width, height, channels, mode, means, stddev from an image safely."""
     try:
         w, h = pil.size
         bands = pil.getbands() or ()
@@ -180,12 +227,11 @@ def _safe_meta(pil: Image.Image) -> Dict[str, Any]:
             "stddev": [float(x) for x in stddev] if stddev else [],
         }
     except Exception:
-        logger.debug("_safe_meta failed", exc_info=True)
+        logger.debug("Failed to extract meta", exc_info=True)
         return {}
 
 
 def _entropy_from_image(pil: Image.Image) -> Optional[float]:
-    """Compute Shannon entropy on grayscale histogram."""
     if pil is None:
         return None
     try:
@@ -197,20 +243,11 @@ def _entropy_from_image(pil: Image.Image) -> Optional[float]:
         ent = -sum((c / total) * math.log2(c / total) for c in hist if c > 0)
         return round(float(ent), 3)
     except Exception:
-        logger.debug("entropy computation failed", exc_info=True)
+        logger.debug("Entropy computation failed", exc_info=True)
         return None
 
 
 def _guess_image_type(meta: Dict[str, Any], entropy: Optional[float]) -> str:
-    """
-    Simple heuristic to set a guess_type label:
-      - 'photograph': typically high entropy, 3 channels, varied means
-      - 'natural' : mid entropy photographic-like
-      - 'diagram'  : low entropy, possibly few colors
-      - 'icon'     : very low entropy and small size
-      - 'unknown'  : fallback
-    The tests only require the presence of a key, so keep this conservative.
-    """
     try:
         if entropy is None:
             return "unknown"
@@ -233,26 +270,24 @@ def _guess_image_type(meta: Dict[str, Any], entropy: Optional[float]) -> str:
 
 
 # ----------------------
-# Public analyzers
+# Public API
 # ----------------------
 def analyze_type(input_obj: Any, allow_network: bool = False) -> Dict[str, Any]:
     """
-    Analyze a single image-like input and return dict with:
-      - meta (width, height, channels, mode, means, stddev)
-      - entropy
-      - suggestions (size/model)
-      - guess_type (heuristic string)
-    Always returns a dict (error dict on failure).
+    Analyze single image-like input and return:
+      {"meta": {...}, "entropy": float, "suggestions": {...}, "guess_type": str}
+    Returns an error dict on failure (never raises).
     """
     try:
         pil = _open_image_from_input(input_obj, allow_network=allow_network)
         if pil is None:
-            logger.debug("analyze_type: unsupported input for input_obj=%r", input_obj)
+            logger.debug("analyze_type: unsupported input: %r", input_obj)
             return {"error": "Unsupported input for analyze_type"}
 
         meta = _safe_meta(pil)
         ent = _entropy_from_image(pil)
-        meta["entropy"] = ent
+        if meta is not None:
+            meta["entropy"] = ent
 
         suggestions: Dict[str, Any] = {}
         suggestions["mode"] = "grayscale" if meta.get("channels", 3) == 1 else "rgb"
@@ -270,7 +305,6 @@ def analyze_type(input_obj: Any, allow_network: bool = False) -> Dict[str, Any]:
             suggestions.update({"suggested_size": [128, 128], "suggested_model": "General-purpose"})
 
         guess = _guess_image_type(meta, ent)
-
         return {"meta": meta, "entropy": ent, "suggestions": suggestions, "guess_type": guess}
     except Exception as exc:
         logger.exception("Unexpected error in analyze_type: %s", exc)
@@ -286,22 +320,22 @@ def analyze_dataset(dataset_input: Any, sample_limit: int = 200) -> Dict[str, An
         items: List[Any] = []
         if isinstance(dataset_input, (str, Path)):
             p = Path(dataset_input).expanduser()
-            # If provided path isn't absolute, try some sensible fallbacks
-            if not p.exists():
+            if not p.exists() or not p.is_dir():
+                # try some fallbacks (cwd, repo)
                 candidates = [p, Path.cwd() / p]
                 try:
                     repo_candidate = Path(__file__).resolve().parents[2] / p
                     candidates.append(repo_candidate)
                 except Exception:
                     pass
-                found_dir = None
-                for cand in candidates:
-                    if cand.exists() and cand.is_dir():
-                        found_dir = cand
+                found = None
+                for c in candidates:
+                    if c.exists() and c.is_dir():
+                        found = c
                         break
-                if found_dir is None:
+                if found is None:
                     return {"error": f"Dataset path invalid: {dataset_input}"}
-                p = found_dir
+                p = found
             exts = {".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff", ".webp", ".gif"}
             for f in sorted(p.rglob("*")):
                 if f.is_file() and f.suffix.lower() in exts:
@@ -334,7 +368,6 @@ def analyze_dataset(dataset_input: Any, sample_limit: int = 200) -> Dict[str, An
             if ent is not None:
                 entropy_vals.append(ent)
             if len(sample_summaries) < 5:
-                # store small sample analysis (use analyze_type on PIL to keep format)
                 sample_summaries.append(analyze_type(pil))
 
         if image_count == 0:
@@ -353,7 +386,7 @@ def analyze_dataset(dataset_input: Any, sample_limit: int = 200) -> Dict[str, An
             "sample_summaries": sample_summaries,
             "unreadable_count": unreadable,
             "sampled_paths_count": len(items),
-            # convenience fields for compatibility checks
+            # convenience fields
             "shapes": [tuple(map(int, s.split("x"))) for s in shape_counter.keys()] if shape_counter else [],
             "channels": list(channels_counter.keys()),
             "min_entropy": min(entropy_vals) if entropy_vals else None,
