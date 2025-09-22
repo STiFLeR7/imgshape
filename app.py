@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 import inspect
 import json
 import logging
+import importlib
 
 from imgshape.shape import get_shape
 from imgshape.analyze import analyze_type
@@ -21,7 +22,6 @@ if not logger.handlers:
     ch.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s"))
     logger.addHandler(ch)
 logger.setLevel(logging.INFO)
-
 
 st.set_page_config(page_title="imgshape v2.2.0", layout="wide")
 st.title("🖼️ imgshape — Smart Dataset Assistant (v2.2.0)")
@@ -97,24 +97,46 @@ def safe_analyze_from_bytes_or_pil(bytes_data, pil_img):
 
 def safe_recommend_from_bytes_or_pil(bytes_data, pil_img, user_prefs=None):
     """
-    Call recommend_preprocessing with buffer or PIL where possible.
+    Call recommend_preprocessing defensively:
+      - If recommend_preprocessing accepts user_prefs, pass it.
+      - Else call with single arg (buffer or PIL).
     Returns recommendation dict or error dict.
     """
     last_exc = None
+    if recommend_preprocessing is None:
+        return {"error": "recommender_missing", "detail": "recommend_preprocessing not available"}
+
+    # Inspect signature to decide whether to pass user_prefs
+    try:
+        sig = inspect.signature(recommend_preprocessing)
+        accepts_user_prefs = "user_prefs" in sig.parameters
+    except Exception:
+        accepts_user_prefs = False
+
+    # Try bytes (preferred)
     if bytes_data:
         buf = BytesIO(bytes_data)
         try:
             buf.seek(0)
-            return recommend_preprocessing(buf, user_prefs=user_prefs)
+            if accepts_user_prefs and user_prefs is not None:
+                return recommend_preprocessing(buf, user_prefs=user_prefs)
+            else:
+                return recommend_preprocessing(buf)
         except Exception as e:
             last_exc = e
             logger.debug("recommend_preprocessing(bytes) failed: %s", e, exc_info=True)
+
+    # Try PIL
     if pil_img is not None:
         try:
-            return recommend_preprocessing(pil_img, user_prefs=user_prefs)
+            if accepts_user_prefs and user_prefs is not None:
+                return recommend_preprocessing(pil_img, user_prefs=user_prefs)
+            else:
+                return recommend_preprocessing(pil_img)
         except Exception as e:
             last_exc = e
             logger.debug("recommend_preprocessing(PIL) failed: %s", e, exc_info=True)
+
     return {"error": "recommend_failed", "detail": str(last_exc) if last_exc else "no input"}
 
 
@@ -195,12 +217,10 @@ with tabs[1]:
     if st.button("Plot Shape Distribution"):
         try:
             out = plot_shape_distribution(dataset_path, save=False)
-            # plot_shape_distribution shows a plt figure if save=False; we can't reuse it directly here
-            # Instead, we just inform the user of saved path or show a simple message
             if out:
                 st.success(f"Saved plot: {out}")
             else:
-                st.info("Plot created (displayed in server side).")
+                st.info("Plot created (displayed on server side).")
         except Exception as e:
             st.error(f"Error plotting dataset: {e}")
 
@@ -227,13 +247,22 @@ with tabs[2]:
             ar = AugmentationRecommender(seed=42)
             # create a minimal stats object for the recommender
             analysis = {}
-            # if analyze succeeded earlier, try extracting entropy
             if isinstance(rec, dict) and rec:
-                # some recommenders embed entropy in keys
-                analysis["entropy_mean"] = rec.get("entropy") or rec.get("meta", {}).get("entropy")
+                analysis["entropy_mean"] = rec.get("entropy") or rec.get("meta", {}).get("entropy") or rec.get("entropy_mean")
             plan = ar.recommend_for_dataset({"entropy_mean": analysis.get("entropy_mean", 5.0), "image_count": 1})
+
+            # Build a safe dict for UI display (don't rely on plan.as_dict existing)
+            try:
+                plan_dict = plan.as_dict()  # preferred if available
+            except Exception:
+                plan_dict = {
+                    "order": getattr(plan, "recommended_order", []),
+                    "augmentations": [a.__dict__ if hasattr(a, "__dict__") else dict(a) for a in getattr(plan, "augmentations", [])],
+                    "seed": getattr(plan, "seed", None),
+                }
+
             st.markdown("#### Augmentation plan (heuristic)")
-            st.json(plan.as_dict())
+            st.json(plan_dict)
         except Exception as e:
             st.error(f"Augmentation generation failed: {e}")
     else:
@@ -294,6 +323,18 @@ st.markdown(
     """
     <div style="text-align: center;">
         <p><b>Connect with me</b></p>
+        <a href="https://instagram.com/stifler.xd" target="_blank" style="margin: 0 10px; text-decoration: none;">
+            <img src="https://cdn-icons-png.flaticon.com/512/2111/2111463.png" width="24"/> Instagram
+        </a>
+        <a href="https://github.com/STiFLeR7" target="_blank" style="margin: 0 10px; text-decoration: none;">
+            <img src="https://cdn-icons-png.flaticon.com/512/733/733553.png" width="24"/> GitHub
+        </a>
+        <a href="https://huggingface.co/STiFLeR7" target="_blank" style="margin: 0 10px; text-decoration: none;">
+            <img src="https://huggingface.co/front/assets/huggingface_logo-noborder.svg" width="24"/> HuggingFace
+        </a>
+        <a href="https://medium.com/@stiflerxd" target="_blank" style="margin: 0 10px; text-decoration: none;">
+            <img src="https://cdn-icons-png.flaticon.com/512/5968/5968906.png" width="24"/> Medium
+        </a>
     </div>
     """,
     unsafe_allow_html=True,
