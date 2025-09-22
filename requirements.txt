@@ -4,3 +4,6 @@ pillow
 numpy
 scikit-image
 imgshape==2.2.0
+imgshape [pdf]
+reportlab
+weasyprint
