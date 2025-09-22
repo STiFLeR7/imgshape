@@ -1,8 +1,6 @@
-streamlit
-imgshape==2.1.4
+streamlit>=1.29
 matplotlib
-torch
-torchvision
-weasyprint
-Pillow
+pillow
 numpy
+scikit-image
+imgshape==2.2.0
