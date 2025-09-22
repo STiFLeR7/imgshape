@@ -148,6 +148,7 @@ def analyze_type(input_obj: Any, allow_network: bool = False) -> Dict[str, Any]:
       - meta (width, height, channels, mode, means, stddev)
       - entropy
       - suggestions (size/model)
+      - guess_type (legacy compatibility)
     """
     try:
         pil = _open_image_from_input(input_obj, allow_network=allow_network)
@@ -173,7 +174,15 @@ def analyze_type(input_obj: Any, allow_network: bool = False) -> Dict[str, Any]:
         else:
             suggestions.update({"suggested_size": [128, 128], "suggested_model": "General-purpose"})
 
-        return {"meta": meta, "entropy": ent, "suggestions": suggestions}
+        # Add guess_type for backward-compatibility with tests
+        if meta.get("channels", 3) == 1:
+            guess_type = "grayscale"
+        elif meta.get("channels", 3) == 3:
+            guess_type = "rgb"
+        else:
+            guess_type = f"{meta.get('channels', 0)}ch"
+
+        return {"meta": meta, "entropy": ent, "suggestions": suggestions, "guess_type": guess_type}
     except Exception as exc:
         logger.exception("Unexpected error in analyze_type: %s", exc)
         return {"error": "Internal analyzer failure", "detail": str(exc)}
