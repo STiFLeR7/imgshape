@@ -5,8 +5,11 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="imgshape",
-    version="2.1.4",
-    description="Smart image shape, dataset analysis, preprocessing & augmentation recommendations for ML workflows",
+    version="2.2.0",
+    description=(
+        "imgshape — robust image shape detection, dataset analysis, preprocessing & "
+        "augmentation recommendations, visualization, compatibility reports, and PyTorch loader helpers"
+    ),
     long_description=long_description,
     long_description_content_type="text/markdown",
     author="Stifler",
@@ -18,14 +21,22 @@ setup(
         "numpy>=1.21.0",
         "matplotlib>=3.4.0",
         "scikit-image>=0.19.0",
-        "gradio>=3.0.0",
-        # seaborn kept optional in pyproject, but safe to leave if you always want it
-        "seaborn>=0.11.0",
+        "gradio>=3.50.0",  # bumped for modern Blocks/Tabs APIs
     ],
     extras_require={
-        "torch": ["torch>=1.12.0", "torchvision>=0.13.0"],
+        "torch": [
+            "torch>=1.12.0; platform_system != 'Windows' or python_version >= '3.8'",
+            "torchvision>=0.13.0",
+        ],
         "pdf": ["weasyprint>=53.0"],
-        "dev": ["pytest>=7.0", "black>=23.0", "flake8>=3.9", "pre-commit>=2.20"],
+        "viz": ["seaborn>=0.11.0"],
+        "dev": [
+            "pytest>=7.0",
+            "black>=23.0",
+            "flake8>=3.9",
+            "pre-commit>=2.20",
+            "mypy>=1.0",
+        ],
     },
     entry_points={
         "console_scripts": [
@@ -37,12 +48,17 @@ setup(
         "License :: OSI Approved :: MIT License",
         "Operating System :: OS Independent",
         "Topic :: Scientific/Engineering :: Image Recognition",
+        "Intended Audience :: Science/Research",
+        "Intended Audience :: Developers",
+        "Development Status :: 4 - Beta",
     ],
     python_requires=">=3.8",
-    keywords="images dataset visualization augmentation pytorch ml",
+    keywords="images dataset visualization augmentation pytorch machine-learning edge-ai",
     url="https://github.com/STiFLeR7/imgshape",
     project_urls={
+        "Homepage": "https://github.com/STiFLeR7/imgshape",
         "Source": "https://github.com/STiFLeR7/imgshape",
         "Issues": "https://github.com/STiFLeR7/imgshape/issues",
+        "Documentation": "https://stifler7.github.io/imgshape/",
     },
 )

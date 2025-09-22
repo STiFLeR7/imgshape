@@ -4,10 +4,11 @@ from __future__ import annotations
 """
 Lightweight, robust Gradio GUI for imgshape v2.2.0
 
-Updates:
-- Ensures JSON serializable outputs by converting numpy types/arrays to native Python types.
-- Keeps existing behavior and defensive fallbacks intact.
-- Minimal changes to UI wiring; just sanitizes handler outputs before returning them to Gradio.
+Changes in this version:
+- gr.JSON replaced by a plain JSON text box to always show full expanded JSON.
+- Handlers already sanitize outputs to JSON-friendly types via _make_serializable.
+- _wrap_handler now returns pretty-printed JSON text for the output textbox.
+- Minor UI polish: expose augmentation checkbox and seed as explicit controls (reused across buttons).
 """
 
 from typing import Any, Dict, Optional, List, Union
@@ -16,6 +17,7 @@ import logging
 from io import BytesIO
 import base64
 import textwrap
+import json
 
 import numpy as np
 from PIL import Image, ImageOps
@@ -59,7 +61,7 @@ def _to_serializable_scalar(x: Any) -> Any:
         return float(x)
     if isinstance(x, (np.integer,)):
         return int(x)
-    if isinstance(x, (np.bool_ , )):
+    if isinstance(x, (np.bool_,)):
         return bool(x)
     return x
 
@@ -313,7 +315,7 @@ def torchloader_handler(inp: Any, prefs: Optional[str] = None) -> Dict[str, Any]
 def _wrap_handler(fn, *args):
     """
     Generic wrapper used by Gradio buttons to call handlers and produce
-    outputs: (json, pil_image or None, html or fallback)
+    outputs: (json_text, pil_image or None, html or fallback)
     """
     try:
         res = fn(*args)
@@ -321,8 +323,13 @@ def _wrap_handler(fn, *args):
         logger.exception("Handler raised: %s", e)
         res = {"error": "handler_exception", "detail": str(e)}
 
-    # Ensure serializable
-    json_out = _make_serializable(res)
+    # Ensure serializable object
+    json_obj = _make_serializable(res)
+    try:
+        json_text = json.dumps(json_obj, indent=2, ensure_ascii=False)
+    except Exception:
+        # Last-resort: string representation
+        json_text = str(json_obj)
 
     # Build image preview: prefer a 'preview_image' key or derive from first arg
     pil_img = None
@@ -349,7 +356,7 @@ def _wrap_handler(fn, *args):
         logger.warning("Failed to build image/3D preview: %s", e)
         html = f"<div style='padding:12px;color:#ddd'>3D preview not available: {e}</div>"
 
-    return json_out, pil_img, html
+    return json_text, pil_img, html
 
 
 def _CSS():
@@ -372,17 +379,21 @@ def launch_gui(server_port: int = 7860, share: bool = False):
                 inp = gr.Image(type="pil", label="Upload Image")
                 path_text = gr.Textbox(label="Or enter path")
                 prefs = gr.Textbox(label="Prefs")
+                include_aug = gr.Checkbox(label="Include augmentation plan", value=False)
+                seed = gr.Number(label="Augmentation seed", value=0)
                 analyze_btn = gr.Button("Analyze")
                 recommend_btn = gr.Button("Recommend")
                 torch_btn = gr.Button("TorchLoader")
             with gr.Column(scale=2, min_width=520):
                 with gr.Tabs():
                     with gr.TabItem("JSON"):
-                        out = gr.JSON(label="Output", value={})
+                        out = gr.Textbox(label="Output (JSON)", value="", lines=30)
                     with gr.TabItem("Image"):
                         img_preview = gr.Image(type="pil", label="Processed Preview")
                     with gr.TabItem("3D"):
-                        html_preview = gr.HTML(value="<div style='padding:12px'>Upload an image and click Analyze/Recommend to see 3D preview.</div>")
+                        html_preview = gr.HTML(
+                            value="<div style='padding:12px'>Upload an image and click Analyze/Recommend to see 3D preview.</div>"
+                        )
 
         analyze_btn.click(
             fn=lambda image_obj, path_text_value: _wrap_handler(analyze_handler, image_obj or path_text_value),
@@ -390,10 +401,14 @@ def launch_gui(server_port: int = 7860, share: bool = False):
             outputs=[out, img_preview, html_preview],
         )
         recommend_btn.click(
-            fn=lambda image_obj, path_text_value, prefs_v, include_aug, seed_v: _wrap_handler(
-                recommend_handler, image_obj or path_text_value, prefs_v, include_aug, int(seed_v) if seed_v is not None else None
+            fn=lambda image_obj, path_text_value, prefs_v, include_aug_v, seed_v: _wrap_handler(
+                recommend_handler,
+                image_obj or path_text_value,
+                prefs_v,
+                include_aug_v,
+                int(seed_v) if seed_v is not None else None,
             ),
-            inputs=[inp, path_text, prefs, gr.Checkbox(label="Include augmentation plan", value=False), gr.Number(label="Augmentation seed", value=0)],
+            inputs=[inp, path_text, prefs, include_aug, seed],
             outputs=[out, img_preview, html_preview],
         )
         torch_btn.click(

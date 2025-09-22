@@ -15,25 +15,25 @@ jobs:
 
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
 
     - name: Set up Python
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
         python-version: "3.11"
 
     - name: Cache pip
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: ~/.cache/pip
-        key: ${{ runner.os }}-pip-${{ hashFiles('**/pyproject.toml') }}
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/pyproject.toml', '**/setup.py') }}
         restore-keys: |
           ${{ runner.os }}-pip-
 
     - name: Install dependencies (editable + extras)
       run: |
-        python -m pip install --upgrade pip
-        # install in editable mode with all extras (torch/pdf/viz/dev)
+        python -m pip install --upgrade pip wheel setuptools
+        # install package in editable mode with all extras
         pip install -e ".[dev,torch,pdf,viz]"
 
     - name: Prepare test image
@@ -70,4 +70,4 @@ jobs:
 
     # ---- Unit Tests ----
     - name: Run pytest
-      run: pytest -q --disable-warnings || true
+      run: pytest -q --disable-warnings --maxfail=1

@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "imgshape"
-version = "2.1.4"
-description = "imgshape — image shape detection, dataset analysis, preprocessing & augmentation recommendations, reports and PyTorch loader helpers"
+version = "2.2.0"
+description = "imgshape — robust image shape detection, dataset analysis, preprocessing & augmentation recommendations, visualization, compatibility reports, and PyTorch loader helpers"
 readme = "README.md"
 authors = [
   { name="Stifler", email="stiflerxd.ai@cudabit.live" }
@@ -13,16 +13,15 @@ authors = [
 license = { text = "MIT" }
 requires-python = ">=3.8"
 
-# runtime dependencies (keep core small; heavy / optional libs as extras)
+# runtime dependencies (keep core lean; heavy libs optional)
 dependencies = [
   "Pillow>=9.0.0",
   "numpy>=1.21.0",
   "matplotlib>=3.4.0",
   "scikit-image>=0.19.0",
-  "gradio>=3.0.0"
+  "gradio>=3.50.0"
 ]
 
-# optional dependency groups (install with `pip install -e .[torch]` etc.)
 [project.optional-dependencies]
 torch = [
   "torch>=1.12.0; platform_system != 'Windows' or python_version >= '3.8'",
@@ -38,15 +37,16 @@ dev = [
   "pytest>=7.0",
   "black>=23.0",
   "flake8>=3.9",
-  "pre-commit>=2.20"
+  "pre-commit>=2.20",
+  "mypy>=1.0"
 ]
 
 [project.urls]
 Homepage = "https://github.com/STiFLeR7/imgshape"
 Source = "https://github.com/STiFLeR7/imgshape"
 Issues = "https://github.com/STiFLeR7/imgshape/issues"
+Documentation = "https://stifler7.github.io/imgshape/"
 
-# CLI entry point (PEP 621 style)
 [project.scripts]
 imgshape = "imgshape.cli:main"
 
@@ -57,11 +57,13 @@ package-dir = {"" = "src"}
 where = ["src"]
 
 [metadata]
-# lightweight classifiers; you can extend these as needed
 classifiers = [
   "Programming Language :: Python :: 3",
   "License :: OSI Approved :: MIT License",
   "Operating System :: OS Independent",
   "Topic :: Scientific/Engineering :: Image Recognition",
+  "Intended Audience :: Science/Research",
+  "Intended Audience :: Developers",
+  "Development Status :: 4 - Beta"
 ]
-keywords = ["images", "dataset", "visualization", "augmentation", "pytorch", "ml"]
+keywords = ["images", "dataset", "visualization", "augmentation", "pytorch", "machine-learning", "edge-ai"]
