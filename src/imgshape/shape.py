@@ -1,33 +1,40 @@
-# shape.py
+"""
+shape.py — shape extraction utilities for imgshape v2.2.0
+"""
+
+from __future__ import annotations
+from typing import Tuple, List
+from pathlib import Path
 from PIL import Image
-import requests
-from io import BytesIO
-import os
 
-def get_shape(path_or_pil):
-    """Return shape (H, W, C) of a local image or PIL image."""
-    if isinstance(path_or_pil, str):
-        img = Image.open(path_or_pil).convert("RGB")
-    else:
-        img = path_or_pil.convert("RGB")
 
-    w, h = img.size
-    c = len(img.getbands())
-    return (h, w, c)
+def get_shape(path_or_img) -> Tuple[int, int, int]:
+    """
+    Return (H, W, C) for a single image.
+    Accepts path string or PIL.Image.
+    """
+    if isinstance(path_or_img, Image.Image):
+        w, h = path_or_img.size
+        c = len(path_or_img.getbands())
+        return (h, w, c)
+    path = Path(path_or_img)
+    with Image.open(path) as img:
+        w, h = img.size
+        c = len(img.getbands())
+        return (h, w, c)
 
-def get_shape_from_url(url: str):
-    """Fetch image from URL and return its shape."""
-    resp = requests.get(url)
-    img = Image.open(BytesIO(resp.content)).convert("RGB")
-    return get_shape(img)
 
-def get_shape_batch(file_paths):
-    shapes = {}
-    for path in file_paths:
-        try:
-            shape = get_shape(path)
-            shapes[path] = shape
-        except Exception as e:
-            print(f"❌ Failed to process {path}: {e}")
+def get_shape_batch(dir_path: str) -> List[Tuple[int, int, int]]:
+    """
+    Return list of shapes for all images in a directory.
+    """
+    p = Path(dir_path)
+    shapes = []
+    exts = (".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff", ".webp")
+    for file in p.iterdir():
+        if file.suffix.lower() in exts:
+            try:
+                shapes.append(get_shape(file))
+            except Exception:
+                continue
     return shapes
-

@@ -1,48 +1,60 @@
 # src/imgshape/recommender.py
+"""
+Self-contained, robust recommender helpers for imgshape v2.2.0.
+
+- Deterministic fallbacks
+- recommend_preprocessing(input_obj, user_prefs=None)
+- recommend_dataset(dataset_input, sample_limit=200, user_prefs=None)
+"""
 from __future__ import annotations
 
-from collections.abc import Mapping
-from pathlib import Path
-from typing import Any, Dict, Optional, Tuple, Iterable, List
-from io import BytesIO
-from PIL import Image, UnidentifiedImageError
 import math
-import glob
 import logging
+from pathlib import Path
+from typing import Any, Dict, Iterable, List, Optional, Tuple, Mapping
 
-logger = logging.getLogger(__name__)
+from io import BytesIO
+from PIL import Image
+
+import numpy as np
+from collections import Counter
+
+logger = logging.getLogger("imgshape.recommender")
+if not logger.handlers:
+    ch = logging.StreamHandler()
+    ch.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s"))
+    logger.addHandler(ch)
+logger.setLevel(logging.INFO)
 
 
 # -------------------------
-# Low-level helpers
+# Helpers
 # -------------------------
 def _open_image_from_input(inp: Any) -> Optional[Image.Image]:
-    """Accept PIL.Image, path-like, bytes/bytearray, BytesIO, or file-like and return PIL.Image (RGB)."""
     if inp is None:
         return None
-
     try:
         if isinstance(inp, Image.Image):
             return inp.convert("RGB")
     except Exception:
-        logger.debug("open_image: not PIL.Image", exc_info=True)
+        logger.debug("Input not PIL.Image", exc_info=True)
 
-    if isinstance(inp, (str, Path)):
-        try:
-            return Image.open(str(inp)).convert("RGB")
-        except Exception:
-            logger.debug("open_image: path open failed for %s", inp, exc_info=True)
-            return None
-
-    if isinstance(inp, (bytes, bytearray)):
-        try:
+    try:
+        if isinstance(inp, (bytes, bytearray)):
             return Image.open(BytesIO(inp)).convert("RGB")
-        except Exception:
-            logger.debug("open_image: bytes open failed", exc_info=True)
-            return None
+    except Exception:
+        logger.debug("Failed opening bytes input as image", exc_info=True)
 
-    if hasattr(inp, "read"):
-        try:
+    try:
+        if isinstance(inp, (str, Path)):
+            p = Path(inp)
+            if p.exists() and p.is_file():
+                return Image.open(p).convert("RGB")
+    except Exception:
+        logger.debug("Failed opening path input as image", exc_info=True)
+
+    try:
+        if hasattr(inp, "read"):
             try:
                 inp.seek(0)
             except Exception:
@@ -50,16 +62,16 @@ def _open_image_from_input(inp: Any) -> Optional[Image.Image]:
             data = inp.read()
             if not data:
                 return None
+            if isinstance(data, str):
+                data = data.encode("utf-8")
             return Image.open(BytesIO(data)).convert("RGB")
-        except Exception:
-            logger.debug("open_image: file-like open failed", exc_info=True)
-            return None
+    except Exception:
+        logger.debug("Failed opening file-like input as image", exc_info=True)
 
     return None
 
 
 def _shape_from_image(pil: Image.Image) -> Optional[Tuple[int, int, int]]:
-    """Return (height, width, channels) from PIL image or None."""
     if pil is None:
         return None
     try:
@@ -72,7 +84,6 @@ def _shape_from_image(pil: Image.Image) -> Optional[Tuple[int, int, int]]:
 
 
 def _entropy_from_image(pil: Image.Image) -> Optional[float]:
-    """Compute simple Shannon entropy on grayscale histogram (base-2)."""
     if pil is None:
         return None
     try:
@@ -94,368 +105,277 @@ def _entropy_from_image(pil: Image.Image) -> Optional[float]:
 
 
 def _defaults_for_channels(channels: int) -> Tuple[List[float], List[float]]:
-    """Return (mean, std) for given channel count."""
     if channels == 1:
         return [0.5], [0.5]
     return [0.485, 0.456, 0.406], [0.229, 0.224, 0.225]
 
 
-def _choose_resize_by_min_side(min_side: int) -> Tuple[Tuple[int, int], str, str]:
-    """
-    Return (size, method, suggested_model).
-    `size` is (width, height).
-    """
-    try:
-        ms = int(min_side)
-    except Exception:
-        ms = 224
-
-    if ms >= 224:
-        return (224, 224), "bilinear", "MobileNet/ResNet"
-    if ms >= 96:
-        return (96, 96), "bilinear", "EfficientNet-B0 (small)"
-    if ms <= 32:
-        return (32, 32), "nearest", "TinyNet/MNIST/CIFAR"
-    return (128, 128), "bilinear", "General Use"
+# -------------------------
+# Preference interpreter
+# -------------------------
+def interpret_prefs(prefs: Optional[List[str]]) -> dict:
+    out = {"bias": "neutral"}
+    if not prefs:
+        return out
+    s = " ".join(prefs).lower()
+    if any(x in s for x in ("fast", "latency", "speed")):
+        out["bias"] = "fast"
+    if any(x in s for x in ("small", "tiny", "edge", "mobile")):
+        out["bias"] = "small"
+    if any(x in s for x in ("high", "quality", "best", "accuracy", "precise")):
+        out["bias"] = "quality"
+    return out
 
 
 # -------------------------
-# Utility helpers (for callers)
+# Fallbacks
 # -------------------------
-def safe_get(obj: Any, key: str, default=None):
-    """
-    Safe accessor: if obj is mapping-like use .get, otherwise try getattr, otherwise default.
-    """
-    try:
-        if isinstance(obj, Mapping):
-            return obj.get(key, default)
-        return getattr(obj, key, default)
-    except Exception:
-        return default
-
-
-def ensure_stats(obj: Any) -> Dict[str, Any]:
-    """
-    Convert common inputs to a stats-like dict.
-    - If obj is a mapping, return it (shallow-copied).
-    - If obj is a PIL.Image or path-like, compute minimal stats and return a mapping.
-    - Otherwise return empty dict.
-    """
-    try:
-        if isinstance(obj, Mapping):
-            return dict(obj)
-    except Exception:
-        pass
-
-    pil = _open_image_from_input(obj)
-    if pil is None:
-        return {}
-
-    shp = _shape_from_image(pil) or (None, None, None)
-    h, w, c = shp
-    entropy = _entropy_from_image(pil)
-    channels = int(c) if c else 3
-
-    stats = {
-        "image_count": 1,
-        "entropy_mean": entropy,
-        "channels": channels,
-        "avg_width": int(w) if w else None,
-        "avg_height": int(h) if h else None,
-        "shape_distribution": {"unique_shapes": {f"{w}x{h}": 1}} if w and h else {},
+def _deterministic_fallback_preprocessing(user_prefs: Optional[List[str]] = None) -> Dict[str, Any]:
+    return {
+        "error": "fallback",
+        "message": "Could not compute recommendation; returning safe conservative defaults.",
+        "user_prefs": user_prefs or [],
+        "bias": interpret_prefs(user_prefs).get("bias", "neutral"),
+        "augmentation_plan": {
+            "order": ["RandomHorizontalFlip"],
+            "augmentations": [
+                {"name": "RandomHorizontalFlip", "params": {"p": 0.5}, "reason": "Default conservative augmentation", "score": 0.4}
+            ],
+        },
+        "resize": {"size": [224, 224], "method": "bilinear", "suggested_model": "ResNet/MobileNet"},
+        "normalize": {"mean": [0.485, 0.456, 0.406], "std": [0.229, 0.224, 0.225]},
+        "mode": "RGB",
     }
+
+
+def _deterministic_fallback_dataset(user_prefs: Optional[List[str]] = None) -> Dict[str, Any]:
+    return {
+        "error": "fallback",
+        "message": "Could not analyse dataset; returning fallback summary.",
+        "user_prefs": user_prefs or [],
+        "dataset_summary": {"image_count": 0, "unique_shapes": {}, "notes": "fallback"},
+    }
+
+
+# -------------------------
+# Core helpers
+# -------------------------
+def _stats_from_pil(pil: Image.Image) -> Dict[str, Any]:
+    stats = {}
+    shp = _shape_from_image(pil)
+    if shp:
+        h, w, c = shp
+        stats["avg_width"] = int(w)
+        stats["avg_height"] = int(h)
+        stats["channels"] = int(c)
+        stats["shape_distribution"] = {f"{w}x{h}": 1}
+    else:
+        stats["channels"] = 3
+    stats["entropy_mean"] = _entropy_from_image(pil)
+    stats["image_count"] = 1
     return stats
 
 
-# -------------------------
-# Augmentation plan generator (basic heuristics)
-# -------------------------
 def _generate_augmentation_plan_from_stats(stats: Mapping) -> Dict[str, Any]:
-    """
-    Return an augmentation_plan dict shaped like:
-    {
-      "order": ["RandomHorizontalFlip", ...],
-      "augmentations": [
-         {"name": "RandomHorizontalFlip", "params": {"p": 0.5}, "reason": "...", "score": 0.7},
-         ...
-      ]
-    }
-    Basic heuristics:
-      - If image count small/one-shot -> be conservative
-      - If entropy high -> color/brightness augmentations OK
-      - If min_side >= 96 -> spatial augmentations allowed
-      - If channels == 3 -> color augmentations possible
-    """
     plan: Dict[str, Any] = {"order": [], "augmentations": []}
-    # safe reads
-    entropy = safe_get(stats, "entropy_mean", None)
-    channels = safe_get(stats, "channels", 3)
-    avg_w = safe_get(stats, "avg_width", None)
-    avg_h = safe_get(stats, "avg_height", None)
-    image_count = safe_get(stats, "image_count", 0) or 0
+    entropy = stats.get("entropy_mean")
+    channels = int(stats.get("channels", 3))
+    avg_w = stats.get("avg_width")
+    avg_h = stats.get("avg_height")
+    image_count = int(stats.get("image_count", 0) or 0)
 
-    # interpret shape
     try:
-        if avg_w and avg_h:
-            min_side = min(int(avg_w), int(avg_h))
-        else:
-            min_side = 224
+        min_side = min(int(avg_w), int(avg_h)) if avg_w and avg_h else 224
     except Exception:
         min_side = 224
 
-    # heuristics & scoring
-    def add_aug(name: str, params: Dict[str, Any], reason: str, base_score: float):
-        plan["order"].append(name)
-        plan["augmentations"].append({"name": name, "params": params, "reason": reason, "score": round(float(base_score), 2)})
+    def add(name: str, params: dict, reason: str, score: float):
+        if name not in plan["order"]:
+            plan["order"].append(name)
+            plan["augmentations"].append({"name": name, "params": params, "reason": reason, "score": round(float(score), 2)})
 
-    # always safe: small geometric flips if natural images
     if min_side >= 32:
-        add_aug(
-            "RandomHorizontalFlip",
-            {"p": 0.5},
-            "Common orientation variance; usually safe for many datasets",
-            0.7,
-        )
+        add("RandomHorizontalFlip", {"p": 0.5}, "Default safe flip for many datasets", 0.7)
 
-    # small rotations if image count moderate and not tiny images
     if min_side >= 96 and image_count > 5:
-        add_aug(
-            "RandomRotation",
-            {"degrees": 15},
-            "Small rotations to increase orientation robustness",
-            0.6,
-        )
+        add("RandomRotation", {"degrees": 15}, "Small rotations to increase orientation robustness", 0.6)
 
-    # color jitter if RGB and entropy indicates variety
-    try:
-        if int(channels) == 3 and (entropy is None or (entropy is not None and entropy >= 3.0)):
-            add_aug(
-                "ColorJitter",
-                {"brightness": 0.2, "contrast": 0.2, "saturation": 0.2, "hue": 0.05},
-                "Color variations; useful for natural images with decent entropy",
-                0.5,
-            )
-    except Exception:
-        pass
+    if channels == 3 and (entropy is None or entropy >= 3.0):
+        add("ColorJitter", {"brightness": 0.2, "contrast": 0.2, "saturation": 0.2, "hue": 0.05}, "Color variations", 0.5)
 
-    # brightness/contrast for low-entropy images (e.g., mostly dark)
     if entropy is not None and entropy < 2.0:
-        add_aug(
-            "RandomAdjustSharpness",
-            {"sharpness_factor": 1.2},
-            "Low-entropy images might benefit from contrast/sharpness augmentation",
-            0.45,
-        )
+        add("RandomAdjustSharpness", {"sharpness_factor": 1.2}, "Low-entropy image adjustments", 0.45)
 
-    # crop/rescale if big images
     if min_side >= 224:
-        add_aug(
-            "RandomResizedCrop",
-            {"size": 224, "scale": [0.8, 1.0]},
-            "Large images: random resized crop helps scale invariance",
-            0.6,
-        )
+        add("RandomResizedCrop", {"size": 224, "scale": [0.8, 1.0]}, "Resize crop for big images", 0.6)
 
-    # if no augmentation added (very small dataset), provide a conservative default
     if not plan["augmentations"]:
-        add_aug("RandomHorizontalFlip", {"p": 0.5}, "Default conservative augmentation", 0.4)
+        add("RandomHorizontalFlip", {"p": 0.5}, "Conservative default", 0.4)
 
-    # ensure order is stable and unique (preserve insertion order but dedupe names)
-    seen = set()
-    ordered = []
-    uniq_aug = []
-    for a in plan["order"]:
-        if a not in seen:
-            seen.add(a)
-            ordered.append(a)
-    deduped_augs = []
-    seen = set()
-    for a in plan["augmentations"]:
-        if a["name"] not in seen:
-            seen.add(a["name"])
-            deduped_augs.append(a)
-
-    plan["order"] = ordered
-    plan["augmentations"] = deduped_augs
     return plan
 
 
 # -------------------------
-# Public API: recommend_preprocessing & recommend_dataset
+# Public API
 # -------------------------
-def recommend_preprocessing(input_obj: Any) -> Dict[str, Any]:
+def recommend_preprocessing(input_obj: Any, user_prefs: Optional[List[str]] = None) -> Dict[str, Any]:
     """
-    Suggest preprocessing steps and augmentation plan.
-
-    Returns keys:
-      - augmentation_plan: dict (order + augmentations)
-      - resize: {"size": [w,h], "method": "..."}
-      - normalize: {"mean": [...], "std": [...]}
-      - mode: "RGB" or "Grayscale"
-      - entropy: float|None
-      - suggested_model: str
-      - (or) error: message
+    Suggest preprocessing steps and augmentation plan for a single image input.
+    user_prefs is a list of short strings, e.g. ["fast","small"] or ["quality"].
     """
-    # Case A: mapping-like stats
-    if isinstance(input_obj, Mapping):
-        stats = input_obj  # type: Mapping
-        entropy = safe_get(stats, "entropy_mean", None)
-        channels = safe_get(stats, "channels", 3)
+    try:
+        pil = _open_image_from_input(input_obj)
+        if pil is None:
+            logger.warning("recommend_preprocessing: could not open input as image, returning fallback")
+            return _deterministic_fallback_preprocessing(user_prefs)
 
-        # shape detection
-        rep_h = rep_w = None
-        sd = safe_get(stats, "shape_distribution", {}) or {}
-        if isinstance(sd, Mapping):
-            uniq = sd.get("unique_shapes") or {}
-            if isinstance(uniq, Mapping) and uniq:
-                for k in uniq.keys():
-                    try:
-                        ks = str(k)
-                        if "x" in ks:
-                            a_str, b_str = ks.split("x", 1)
-                            a, b = int(a_str), int(b_str)
-                            if a >= b:
-                                rep_w, rep_h = a, b
-                            else:
-                                rep_w, rep_h = b, a
-                            break
-                    except Exception:
-                        continue
+        stats = _stats_from_pil(pil)
+        plan = _generate_augmentation_plan_from_stats(stats)
+        pref_meta = interpret_prefs(user_prefs or [])
 
-        if rep_h is None or rep_w is None:
-            rep_h = safe_get(stats, "height") or safe_get(stats, "avg_height") or None
-            rep_w = safe_get(stats, "width") or safe_get(stats, "avg_width") or None
-
-        if rep_h and rep_w:
-            try:
-                min_side = min(int(rep_h), int(rep_w))
-            except Exception:
-                min_side = 224
-        else:
+        try:
+            min_side = min(int(stats.get("avg_width", 224)), int(stats.get("avg_height", 224)))
+        except Exception:
             min_side = 224
 
-        size_tuple, method, suggested = _choose_resize_by_min_side(min_side)
-        try:
-            channels = int(channels) if channels is not None else 3
-        except Exception:
-            channels = 3
+        bias = pref_meta.get("bias", "neutral")
+
+        # Bias-influenced choices
+        if bias == "fast":
+            if min_side >= 96:
+                size = [96, 96]; method = "bilinear"; suggested_model = "EfficientNet-B0 (fast)"
+            else:
+                size = [64, 64]; method = "nearest"; suggested_model = "TinyNet (very fast)"
+        elif bias == "small":
+            size = [96, 96] if min_side >= 96 else [64, 64]; method = "bilinear"; suggested_model = "MobileNetV2 (edge)"
+        elif bias == "quality":
+            size = [224, 224] if min_side >= 224 else [128, 128]; method = "bilinear"; suggested_model = "ResNet50 / EfficientNet-Lite (quality)"
+        else:
+            if min_side >= 224:
+                size = [224, 224]; method = "bilinear"; suggested_model = "ResNet18 / MobileNetV2"
+            elif min_side >= 96:
+                size = [96, 96]; method = "bilinear"; suggested_model = "EfficientNet-B0 (small)"
+            elif min_side <= 32:
+                size = [32, 32]; method = "nearest"; suggested_model = "TinyNet / CIFAR style"
+            else:
+                size = [128, 128]; method = "bilinear"; suggested_model = "General-purpose (mid)"
+
+        # tweak augmentation scores slightly by bias
+        if bias == "quality":
+            for a in plan["augmentations"]:
+                a["score"] = round(min(1.0, a.get("score", 0.0) + 0.05), 3)
+        elif bias in ("fast", "small"):
+            for a in plan["augmentations"]:
+                if a["name"] == "RandomResizedCrop":
+                    a["score"] = round(max(0.0, a.get("score", 0.0) - 0.15), 3)
+
+        channels = int(stats.get("channels", 3))
         mean, std = _defaults_for_channels(channels)
 
-        augmentation_plan = _generate_augmentation_plan_from_stats(stats)
-
-        width, height = size_tuple
-        return {
-            "augmentation_plan": augmentation_plan,
-            "resize": {"size": [width, height], "method": method},
+        out = {
+            "user_prefs": user_prefs or [],
+            "bias": bias,
+            "augmentation_plan": plan,
+            "resize": {"size": size, "method": method, "suggested_model": suggested_model},
             "normalize": {"mean": mean, "std": std},
             "mode": "RGB" if channels == 3 else "Grayscale",
-            "entropy": entropy,
-            "suggested_model": suggested,
+            "entropy": stats.get("entropy_mean"),
+            "channels": channels,
+            "image_count": stats.get("image_count", 1),
         }
+        return out
+    except Exception as exc:
+        logger.exception("Unexpected error in recommend_preprocessing: %s", exc)
+        return _deterministic_fallback_preprocessing(user_prefs)
 
-    # Case B: image-like input
-    pil = _open_image_from_input(input_obj)
-    if pil is None:
-        tname = type(input_obj).__name__ if input_obj is not None else "None"
-        return {"error": f"Unsupported input for recommend_preprocessing (type={tname}). Provide stats mapping, path, PIL.Image, bytes, or file-like."}
 
-    shape = _shape_from_image(pil)
-    entropy = _entropy_from_image(pil)
-    if shape:
-        h, w, c = shape
-    else:
-        h = w = c = None
-
-    min_side = min(w, h) if (w and h) else 224
-    size_tuple, method, suggested = _choose_resize_by_min_side(min_side)
-
-    channels = c if c is not None else len(pil.getbands()) if pil else 3
+def recommend_dataset(dataset_input: Any, sample_limit: int = 200, user_prefs: Optional[List[str]] = None) -> Dict[str, Any]:
+    """
+    Lightweight dataset-level recommender. Returns dataset_summary and representative_preprocessing.
+    """
     try:
-        channels = int(channels)
-    except Exception:
-        channels = 3
-    mean, std = _defaults_for_channels(channels)
+        images: List[Any] = []
+        if isinstance(dataset_input, (str, Path)):
+            p = Path(dataset_input)
+            if not p.exists() or not p.is_dir():
+                logger.warning("recommend_dataset: dataset path invalid or not a dir: %s", dataset_input)
+                return _deterministic_fallback_dataset(user_prefs)
+            exts = ("*.jpg", "*.jpeg", "*.png", "*.bmp", "*.tif", "*.tiff", "*.webp")
+            paths = []
+            for e in exts:
+                paths.extend(sorted(p.glob(e)))
+            paths = sorted(dict.fromkeys(paths))
+            images = paths[:sample_limit]
+        elif isinstance(dataset_input, Iterable):
+            images = list(dataset_input)[:sample_limit]
+        else:
+            logger.warning("recommend_dataset: unsupported dataset_input type, returning fallback")
+            return _deterministic_fallback_dataset(user_prefs)
 
-    # build light stats for augmentation plan generation
-    stats_for_plan = {
-        "image_count": 1,
-        "entropy_mean": entropy,
-        "channels": channels,
-        "avg_width": int(w) if w else None,
-        "avg_height": int(h) if h else None,
-        "shape_distribution": {"unique_shapes": {f"{w}x{h}": 1}} if w and h else {},
-    }
-    augmentation_plan = _generate_augmentation_plan_from_stats(stats_for_plan)
-
-    width, height = size_tuple
-    return {
-        "augmentation_plan": augmentation_plan,
-        "resize": {"size": [width, height], "method": method},
-        "normalize": {"mean": mean, "std": std},
-        "mode": "RGB" if channels == 3 else "Grayscale",
-        "entropy": entropy,
-        "suggested_model": suggested,
-    }
-
-
-def _find_images_in_path(path: Path, exts: Iterable[str]) -> List[str]:
-    results: List[str] = []
-    for ext in exts:
-        results.extend(glob.glob(str(path / "**" / ext), recursive=True))
-    return results
-
-
-def recommend_dataset(dataset_input: Any, sample_limit: int = 50) -> Dict[str, Any]:
-    """
-    Lightweight dataset-level recommender. If passed a mapping, forwarded to recommend_preprocessing.
-    If passed a path, scans sample files and aggregates minimal stats, then forwards.
-    """
-    if isinstance(dataset_input, Mapping):
-        return recommend_preprocessing(dataset_input)
-
-    if isinstance(dataset_input, (str, Path)):
-        path = Path(dataset_input)
-        if not path.exists():
-            return {"error": f"path not found: {dataset_input}"}
-
-        exts = ("*.jpg", "*.jpeg", "*.png", "*.bmp", "*.tiff", "*.gif", "*.webp")
-        images = _find_images_in_path(path, exts)
         if not images:
-            return {"error": "no images found in dataset path"}
+            logger.warning("recommend_dataset: no images found in dataset; returning fallback")
+            return _deterministic_fallback_dataset(user_prefs)
 
-        sample_files = images[:sample_limit]
-        entropies: List[float] = []
-        channels_seen: List[int] = []
-        widths: List[int] = []
-        heights: List[int] = []
+        total = 0
+        shape_counter = Counter()
+        entropy_vals = []
+        channels_set = set()
 
-        for p in sample_files:
-            try:
-                img = _open_image_from_input(p)
-                if img is None:
-                    continue
-                shp = _shape_from_image(img)
-                if not shp:
-                    continue
-                hh, ww, cc = shp
-                ent = _entropy_from_image(img) or 0.0
-                entropies.append(ent)
-                channels_seen.append(cc)
-                widths.append(ww)
-                heights.append(hh)
-            except Exception:
-                logger.debug("Error processing sample image %s", p, exc_info=True)
+        for item in images:
+            pil = _open_image_from_input(item)
+            if pil is None:
                 continue
+            total += 1
+            shp = _shape_from_image(pil)
+            if shp:
+                h, w, c = shp
+                shape_counter[f"{w}x{h}"] += 1
+                channels_set.add(c)
+            ent = _entropy_from_image(pil)
+            if ent is not None:
+                entropy_vals.append(ent)
 
-        stats: Dict[str, Any] = {
-            "image_count": len(images),
-            "entropy_mean": round(sum(entropies) / len(entropies), 3) if entropies else None,
-            "channels": max(set(channels_seen), key=channels_seen.count) if channels_seen else None,
-            "avg_width": int(sum(widths) / len(widths)) if widths else None,
-            "avg_height": int(sum(heights) / len(heights)) if heights else None,
-            "shape_distribution": {"unique_shapes": {f"{w}x{h}": 1 for w, h in zip(widths, heights)}},
+        if total == 0:
+            logger.warning("recommend_dataset: after scanning, no readable images; returning fallback")
+            return _deterministic_fallback_dataset(user_prefs)
+
+        avg_entropy = round(float(sum(entropy_vals) / len(entropy_vals)), 3) if entropy_vals else None
+        most_common_shape, most_common_count = shape_counter.most_common(1)[0] if shape_counter else (None, 0)
+        channels = sorted(list(channels_set)) if channels_set else [3]
+
+        stats = {
+            "image_count": total,
+            "unique_shapes": dict(shape_counter),
+            "most_common_shape": most_common_shape,
+            "most_common_shape_count": most_common_count,
+            "avg_entropy": avg_entropy,
+            "channels": channels,
         }
 
-        return recommend_preprocessing(stats)
+        rep = None
+        for item in images:
+            rep = _open_image_from_input(item)
+            if rep is not None:
+                break
 
-    return {"error": "Unsupported input for recommend_dataset"}
+        if rep is None:
+            logger.warning("recommend_dataset: could not open any rep image for deriving preprocessing")
+            return _deterministic_fallback_dataset(user_prefs)
+
+        pre = recommend_preprocessing(rep, user_prefs=user_prefs)
+
+        out = {
+            "user_prefs": user_prefs or [],
+            "dataset_summary": stats,
+            "representative_preprocessing": pre,
+        }
+        return out
+
+    except Exception as exc:
+        logger.exception("Unexpected error in recommend_dataset: %s", exc)
+        return _deterministic_fallback_dataset(user_prefs)
+
+
+# -------------------------
+# End
+# -------------------------

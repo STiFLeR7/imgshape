@@ -1,139 +1,272 @@
 # src/imgshape/analyze.py
-from PIL import Image, ImageStat, ImageFilter
-import numpy as np
+"""
+Robust analyze module for imgshape v2.2.0
+
+Provides:
+- analyze_type(input_obj): analyze a single image-like input and return stats/detection.
+- analyze_dataset(dataset_path_or_iterable, sample_limit=200): scan a dataset and return aggregated stats.
+
+Input types supported:
+- PIL.Image.Image
+- str / pathlib.Path (path to file)
+- bytes / bytearray
+- file-like object (has .read())
+- URL strings (http/https) only if allow_network=True
+Returns a dict. On error returns {"error": "..."}.
+"""
+from __future__ import annotations
+
+import logging
+from typing import Any, Dict, Optional, Iterable, List
+from pathlib import Path
+from io import BytesIO
+
+from PIL import Image, UnidentifiedImageError, ImageStat
+
+import math
 from collections import Counter
-from typing import Dict, Any, List
-from statistics import mean, pstdev
-import os, glob
+
+logger = logging.getLogger("imgshape.analyze")
+if not logger.handlers:
+    ch = logging.StreamHandler()
+    ch.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s"))
+    logger.addHandler(ch)
+logger.setLevel(logging.INFO)
 
 
-def get_entropy(image_path: str) -> float:
-    """Returns entropy of an image (Shannon entropy over grayscale)."""
-    img = Image.open(image_path).convert("L")
-    return img.entropy()
-
-
-def get_edge_density(image_path: str) -> float:
-    """Returns edge pixel ratio after edge detection."""
-    img = Image.open(image_path).convert("L")
-    edges = img.filter(ImageFilter.FIND_EDGES)
-    arr = np.array(edges)
-    edge_pixels = np.sum(arr > 50)  # threshold
-    total_pixels = arr.size
-    return edge_pixels / total_pixels
-
-
-def get_dominant_color(image_path: str) -> str:
-    """Returns the dominant color (as hex) in the image."""
-    img = Image.open(image_path).convert("RGB").resize((50, 50))
-    pixels = np.array(img).reshape(-1, 3)
-    counts = Counter(map(tuple, pixels))
-    dominant = counts.most_common(1)[0][0]
-    return '#%02x%02x%02x' % dominant
-
-
-def analyze_type(image_path: str) -> Dict[str, Any]:
-    """Performs a lightweight image type analysis (single image)."""
-    entropy = get_entropy(image_path)
-    edge_density = get_edge_density(image_path)
-    dominant_color = get_dominant_color(image_path)
-
-    # Heuristic type guesser (can improve later)
-    if entropy < 3.0 and edge_density < 0.01:
-        guess = "document/scan"
-    elif edge_density > 0.07:
-        guess = "object-rich"
-    elif entropy > 5.0:
-        guess = "natural image"
-    else:
-        guess = "uncertain"
-
-    return {
-        "entropy": round(entropy, 2),
-        "edge_density": round(edge_density, 3),
-        "dominant_color": dominant_color,
-        "guess_type": guess,
-    }
-
-
-# ----------------------
-# NEW: dataset-level API
-# ----------------------
-
-def analyze_dataset(folder_path: str) -> Dict[str, Any]:
+# ---- helpers: open and normalize inputs ----
+def _open_image_from_input(inp: Any, allow_network: bool = False) -> Optional[Image.Image]:
     """
-    Aggregate dataset-level statistics for images under folder_path.
-    Returns a dict with at least: image_count, source_dir, entropy stats, channels, etc.
+    Robustly open a PIL.Image from a variety of inputs:
+      - PIL.Image.Image -> return .convert("RGB")
+      - bytes / bytearray -> BytesIO -> PIL
+      - str / Path -> file path -> PIL if exists (NETWORK ops disabled by default)
+      - file-like (has read) -> read bytes -> PIL
+    Returns None if it cannot be opened.
     """
-    exts = ("*.jpg", "*.jpeg", "*.png", "*.bmp", "*.tiff", "*.gif")
-    files: List[str] = []
-    for e in exts:
-        files.extend(glob.glob(os.path.join(folder_path, "**", e), recursive=True))
+    if inp is None:
+        return None
 
-    stats: Dict[str, Any] = {
-        "image_count": len(files),
-        "source_dir": folder_path,
-        "shape_distribution": {},
-        "class_balance": {},
-    }
-
-    if not files:
-        return stats
-
-    entropies: List[float] = []
-    edge_densities: List[float] = []
-    colorfulness: List[str] = []
-    channels_seen: List[int] = []
-
-    for f in files:
-        try:
-            info = analyze_type(f)
-            if "entropy" in info:
-                entropies.append(info["entropy"])
-            if "edge_density" in info:
-                edge_densities.append(info["edge_density"])
-            if "dominant_color" in info:
-                colorfulness.append(info["dominant_color"])
-            # crude channel inference
-            try:
-                img = Image.open(f)
-                channels_seen.append(len(img.getbands()))
-            except Exception:
-                pass
-        except Exception:
-            continue
-
-    if entropies:
-        stats["entropy_mean"] = round(mean(entropies), 3)
-        stats["entropy_std"] = round(pstdev(entropies), 3) if len(entropies) > 1 else 0.0
-    if edge_densities:
-        stats["edge_density_mean"] = round(mean(edge_densities), 3)
-    if colorfulness:
-        # dominant color mode (most frequent)
-        counts = Counter(colorfulness)
-        stats["dominant_color_mode"] = max(counts, key=counts.get)
-    if channels_seen:
-        stats["channels"] = max(set(channels_seen), key=channels_seen.count)
-
-    # simple shape distribution
+    # If already a PIL image, just convert and return
     try:
-        from imgshape.shape import get_shape
-        wh = []
-        for fp in files:
-            try:
-                s = get_shape(fp)
-                if s and len(s) >= 2:
-                    h, w = s[0], s[1]
-                    wh.append((w, h))
-            except Exception:
-                continue
-        if wh:
-            uniq = Counter(wh)
-            stats["shape_distribution"] = {
-                "unique_shapes": {f"{w}x{h}": c for (w, h), c in uniq.items()},
-                "most_common": f"{max(uniq, key=uniq.get)[0]}x{max(uniq, key=uniq.get)[1]}",
-            }
+        if isinstance(inp, Image.Image):
+            return inp.convert("RGB")
     except Exception:
-        pass
+        logger.debug("Input is not PIL.Image or conversion failed", exc_info=True)
 
-    return stats
+    # Bytes-like
+    try:
+        if isinstance(inp, (bytes, bytearray)):
+            return Image.open(BytesIO(inp)).convert("RGB")
+    except Exception:
+        logger.debug("Failed to open bytes input as image", exc_info=True)
+
+    # Path-like (string or Path)
+    try:
+        if isinstance(inp, (str, Path)):
+            s = str(inp)
+            p = Path(s)
+            if p.exists() and p.is_file():
+                return Image.open(p).convert("RGB")
+            # If it's a URL and network allowed, fetch it (disabled by default)
+            if (s.startswith("http://") or s.startswith("https://")) and allow_network:
+                try:
+                    import requests
+
+                    r = requests.get(s, timeout=5)
+                    r.raise_for_status()
+                    return Image.open(BytesIO(r.content)).convert("RGB")
+                except Exception:
+                    logger.debug("Failed to fetch URL image", exc_info=True)
+    except Exception:
+        logger.debug("Failed to handle string/path input", exc_info=True)
+
+    # File-like objects (e.g., Gradio file object may present differently)
+    try:
+        if hasattr(inp, "read"):
+            try:
+                pos = None
+                try:
+                    pos = inp.tell()
+                except Exception:
+                    pos = None
+                data = inp.read()
+                if data:
+                    if isinstance(data, str):
+                        data = data.encode("utf-8")
+                    return Image.open(BytesIO(data)).convert("RGB")
+                if pos is not None:
+                    try:
+                        inp.seek(pos)
+                    except Exception:
+                        pass
+            except Exception:
+                logger.debug("Error reading file-like object in _open_image_from_input", exc_info=True)
+    except Exception:
+        logger.debug("Input does not support read()", exc_info=True)
+
+    return None
+
+
+def _safe_mode_and_channels(pil: Image.Image) -> Dict[str, Any]:
+    """
+    Return small dict describing mode, channels, size and basic stats.
+    """
+    try:
+        w, h = pil.size
+        bands = pil.getbands() or ()
+        channels = len(bands)
+        mode = pil.mode
+        try:
+            stat = ImageStat.Stat(pil)
+            means = stat.mean if hasattr(stat, "mean") else []
+            stddev = stat.stddev if hasattr(stat, "stddev") else []
+        except Exception:
+            means = []
+            stddev = []
+        return {
+            "width": int(w),
+            "height": int(h),
+            "channels": int(channels),
+            "mode": mode,
+            "means": [float(x) for x in means] if means else [],
+            "stddev": [float(x) for x in stddev] if stddev else [],
+        }
+    except Exception:
+        logger.debug("_safe_mode_and_channels failed", exc_info=True)
+        return {}
+
+
+def _entropy_from_image(pil: Image.Image) -> Optional[float]:
+    """Shannon entropy computed on grayscale histogram; robust to exceptions."""
+    if pil is None:
+        return None
+    try:
+        gray = pil.convert("L")
+        hist = gray.histogram()
+        total = sum(hist)
+        if total == 0:
+            return 0.0
+        ent = 0.0
+        for c in hist:
+            if c == 0:
+                continue
+            p = c / total
+            ent -= p * math.log2(p)
+        return round(float(ent), 3)
+    except Exception:
+        logger.debug("entropy computation failed", exc_info=True)
+        return None
+
+
+# ---- Public single-image analyzer ----
+def analyze_type(input_obj: Any, allow_network: bool = False) -> Dict[str, Any]:
+    """
+    Analyze a single image-like input and return a dict with:
+      - meta (width, height, channels, mode, means, stddev)
+      - entropy
+      - suggestions (size/model)
+    Always returns a dict — on failure returns {'error': '...'}.
+    """
+    try:
+        pil = _open_image_from_input(input_obj, allow_network=allow_network)
+        if pil is None:
+            return {"error": "Unsupported input for analyze_type. Provide path, PIL.Image, bytes, or file-like."}
+
+        meta = _safe_mode_and_channels(pil)
+        entropy = _entropy_from_image(pil)
+        meta["entropy"] = entropy
+
+        suggestions = {}
+        if meta.get("channels", 3) == 1:
+            suggestions["mode"] = "grayscale"
+        else:
+            suggestions["mode"] = "rgb"
+
+        w = meta.get("width")
+        h = meta.get("height")
+        if w and h:
+            min_side = min(int(w), int(h))
+            if min_side >= 224:
+                suggestions["suggested_size"] = [224, 224]
+                suggestions["suggested_model"] = "ResNet/MobileNet"
+            elif min_side >= 96:
+                suggestions["suggested_size"] = [96, 96]
+                suggestions["suggested_model"] = "EfficientNet-B0 / MobileNetV2"
+            else:
+                suggestions["suggested_size"] = [32, 32]
+                suggestions["suggested_model"] = "TinyNet/CIFAR-style"
+        else:
+            suggestions["suggested_size"] = [128, 128]
+            suggestions["suggested_model"] = "General-purpose"
+
+        result = {"meta": meta, "suggestions": suggestions}
+        return result
+    except Exception as exc:
+        logger.exception("Unexpected error in analyze_type: %s", exc)
+        return {"error": "Internal analyzer failure", "detail": str(exc)}
+
+
+# ---- Public dataset analyzer ----
+def analyze_dataset(dataset_input: Any, sample_limit: int = 200) -> Dict[str, Any]:
+    """
+    Analyze a dataset (directory path or iterable of image-like objects).
+    Returns aggregated statistics.
+    """
+    try:
+        items: List[Any] = []
+        if isinstance(dataset_input, (str, Path)):
+            p = Path(dataset_input)
+            if not p.exists() or not p.is_dir():
+                return {"error": "Dataset path invalid or not a directory."}
+            exts = ("*.jpg", "*.jpeg", "*.png", "*.bmp", "*.tif", "*.tiff", "*.webp")
+            paths = []
+            for e in exts:
+                paths.extend(sorted(p.glob(e)))
+            paths = sorted(dict.fromkeys(paths))
+            items = paths[: sample_limit]
+        elif isinstance(dataset_input, Iterable):
+            items = list(dataset_input)[:sample_limit]
+        else:
+            return {"error": "Unsupported dataset input. Provide path or iterable of images."}
+
+        if not items:
+            return {"error": "No images found in dataset."}
+
+        image_count = 0
+        shape_counter = Counter()
+        entropy_values = []
+        channels_counter = Counter()
+        sample_summaries = []
+
+        for it in items:
+            pil = _open_image_from_input(it)
+            if pil is None:
+                continue
+            image_count += 1
+            w, h = pil.size
+            shape_counter[f"{w}x{h}"] += 1
+            channels_counter[len(pil.getbands())] += 1
+            ent = _entropy_from_image(pil)
+            if ent is not None:
+                entropy_values.append(ent)
+            if len(sample_summaries) < 5:
+                summ = analyze_type(pil)
+                sample_summaries.append(summ)
+
+        if image_count == 0:
+            return {"error": "No readable images in dataset."}
+
+        avg_entropy = round(float(sum(entropy_values) / len(entropy_values)), 3) if entropy_values else None
+
+        out = {
+            "image_count": image_count,
+            "unique_shapes": dict(shape_counter),
+            "channels_distribution": dict(channels_counter),
+            "avg_entropy": avg_entropy,
+            "sample_summaries": sample_summaries,
+        }
+        return out
+    except Exception as exc:
+        logger.exception("Unexpected error in analyze_dataset: %s", exc)
+        return {"error": "Internal dataset analyzer failure", "detail": str(exc)}
