@@ -1,5 +1,5 @@
 streamlit
-imgshape==2.1.0
+imgshape==2.1.4
 matplotlib
 torch
 torchvision
