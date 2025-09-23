@@ -3,72 +3,104 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>imgshape · Live</title>
+  <title>imgshape · Live (v2.2.0)</title>
   <link rel="stylesheet" href="/static/style.css">
+  <!-- small, neutral system font fallback; no external fonts to keep static deploy simple -->
+  <meta name="theme-color" content="#0b0d10">
 </head>
 <body>
   <nav class="topbar">
-    <div class="brand">imgshape <span class="version">v2.2.0</span></div>
+    <div class="brand">
+      <svg class="logo" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+        <rect x="2" y="2" width="20" height="20" rx="4" fill="none" stroke="currentColor" stroke-width="1.2"/>
+        <path d="M7 15 L12 9 L17 15" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      imgshape <span class="version">v2.2.0</span>
+    </div>
     <div class="nav-right">
-      <a href="#" id="help-link">Docs</a>
+      <input id="apiBase" class="api-base" placeholder="API base (defaults to /)" title="Set API base (optional)" />
+      <a id="help-link" class="btn-link" href="#" target="_blank">Docs</a>
     </div>
   </nav>
 
   <main class="container">
-    <aside class="sidebar">
-      <div class="card">
-        <label class="label">Upload image</label>
-        <input id="fileInput" type="file" accept="image/*" />
-        <label class="label">Or dataset path (server)</label>
-        <input id="pathInput" type="text" placeholder="/data/my_dataset" />
-        <label class="label">Prefs (comma separated)</label>
-        <input id="prefsInput" type="text" placeholder="fast,small,quality" />
-        <div class="row">
+    <aside class="sidebar card">
+      <div class="section">
+        <label class="label">Image (drag & drop or click)</label>
+        <div id="dropzone" class="dropzone">
+          <input id="fileInput" type="file" accept="image/*" />
+          <div class="drop-hint">Drop image here — JPG/PNG (max 10MB)</div>
+          <div id="previewSmall" class="preview-thumb" aria-hidden="true"></div>
+        </div>
+
+        <div class="form-row">
+          <label class="label">Or dataset path (server)</label>
+          <input id="pathInput" type="text" placeholder="/data/my_dataset" />
+        </div>
+
+        <div class="form-row">
+          <label class="label">Prefs (comma separated)</label>
+          <input id="prefsInput" type="text" placeholder="fast,small,quality" />
+        </div>
+
+        <div class="form-row">
+          <label class="label">Model (compatibility)</label>
+          <input id="modelInput" type="text" placeholder="mobilenet_v2 or ResNet50" />
+        </div>
+
+        <div class="row actions">
           <button id="analyzeBtn" class="btn primary">Analyze</button>
           <button id="recommendBtn" class="btn">Recommend</button>
         </div>
 
-        <hr />
-
-        <label class="label">Model compatibility check</label>
-        <input id="modelInput" type="text" placeholder="mobilenet_v2 or ResNet50" />
-        <div class="row">
+        <div class="row actions">
           <button id="compatBtn" class="btn full">Check Compatibility</button>
         </div>
 
-        <hr />
+        <hr class="separator" />
 
-        <div class="muted">Output JSON is full, pretty-printed. Click "Download JSON" to save results.</div>
+        <div class="muted small">Click <strong>Download JSON</strong> to save full results. Toggle API base to point to staging / prod.</div>
+
         <div class="row">
           <button id="downloadBtn" class="btn ghost">Download JSON</button>
+          <button id="copyBtn" class="btn ghost">Copy JSON</button>
         </div>
       </div>
     </aside>
 
     <section class="main">
       <div class="toprow">
-        <div class="preview card">
-          <div class="preview-inner">
+        <div class="panel card preview-panel">
+          <div class="panel-head">Preview</div>
+          <div id="preview" class="preview-area">
             <img id="imgPreview" alt="preview" />
+            <div id="imgMeta" class="meta"></div>
           </div>
-          <div class="meta" id="imgMeta"></div>
+          <div id="progress" class="progress-bar" aria-hidden="true"><div class="progress-inner"></div></div>
         </div>
 
-        <div class="output card">
-          <div class="output-head">JSON Output</div>
-          <pre id="jsonOutput" class="json"></pre>
+        <div class="panel card output-panel">
+          <div class="panel-head">JSON Output</div>
+          <div id="jsonToolbar" class="json-toolbar">
+            <button id="prettyBtn" class="tiny">Pretty</button>
+            <button id="rawBtn" class="tiny">Raw</button>
+            <div class="flex-spacer"></div>
+            <div id="statusBadge" class="badge muted">idle</div>
+          </div>
+          <pre id="jsonOutput" class="json" aria-live="polite"></pre>
         </div>
       </div>
 
-      <div class="bottom row">
-        <div class="card wide">
-          <div class="output-head">Logs</div>
+      <div class="bottom">
+        <div class="card logs">
+          <div class="panel-head">Logs</div>
           <div id="logArea" class="log"></div>
         </div>
       </div>
     </section>
   </main>
 
+  <!-- lightweight, modular logic -->
   <script src="/static/app.js" type="module"></script>
 </body>
 </html>
