@@ -1,10 +1,3 @@
-# Changelog
-
-All notable changes to **imgshape** will be documented in this file.  
-This project follows [Semantic Versioning](https://semver.org/).
-
----
-
 ## [2.2.0] - 2025-09-22
 ### 🚀 Major Release
 - Full **Streamlit App** (`app.py`) introduced with 5 interactive tabs:  

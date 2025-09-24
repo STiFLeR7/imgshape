@@ -1,6 +1,6 @@
 // app.js (ES module) — upgraded UI behaviors for imgshape v2.2.0
-// Keeps the same backend endpoints: /analyze, /recommend, /compatibility
-// Improvements: drag & drop, apiBase input, progress UI, cancel support, pretty/raw toggle, copy/download, nicer logs.
+// Adds a tiny brand logo lazy-loader and keeps existing behaviors.
+// Source original referenced: uploaded app.js (used as base). :contentReference[oaicite:3]{index=3}
 
 const $ = sel => document.querySelector(sel);
 const fileInput = $('#fileInput');
@@ -28,6 +28,23 @@ let lastJson = null;
 let xhrController = null;
 let currentMode = 'pretty'; // 'pretty' or 'raw'
 
+// -- BRAND LOGO: change this path if your deployment places logo elsewhere
+const BRAND_LOGO = 'assets\\sample_images\\imgshape_lg.png';
+
+// lazy-load brand logo (improves initial paint; if asset missing, silently fallback)
+function lazyLoadBrandLogo() {
+  const img = document.getElementById('brandLogo');
+  if (!img) return;
+  // sanity: don't overwrite if already set by HTML (but allow lazy fallback)
+  if (img.getAttribute('src')) {
+    // attempt to ensure it can load; if 404 occurs browser will handle
+    return;
+  }
+  img.src = BRAND_LOGO;
+}
+document.addEventListener('DOMContentLoaded', lazyLoadBrandLogo);
+
+// logging helper
 function log(msg, level='info') {
   const el = document.createElement('div');
   const t = new Date().toLocaleTimeString();
@@ -66,7 +83,6 @@ function setStatus(s) {
 function apiBase() {
   const v = (apiBaseInput.value || '').trim();
   if (!v) return '';
-  // if user provided a base without protocol, keep it as-is (could be relative)
   return v.endsWith('/') ? v.slice(0,-1) : v;
 }
 
@@ -143,7 +159,6 @@ async function postImageTo(endpoint, file, extraForm = {}, onProgress) {
       xhrController = null;
     }
   } else {
-    // (older browsers) fallback to XMLHttpRequest to allow progress events
     return new Promise((resolve, reject) => {
       const xhr = new XMLHttpRequest();
       xhr.open('POST', url);
@@ -177,7 +192,6 @@ analyzeBtn.addEventListener('click', async () => {
     if (file) {
       result = await postImageTo('/analyze', file);
     } else if (path) {
-      // if backend supports analyze-by-path, call it; otherwise compatibility fallback
       const res = await fetch(`${apiBase()}/analyze`, { method: 'POST', body: new URLSearchParams({ dataset_path: path }) });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       result = await res.json();
@@ -287,23 +301,16 @@ copyBtn.addEventListener('click', async () => {
 prettyBtn.addEventListener('click', () => { currentMode = 'pretty'; if (lastJson) prettyPrint(lastJson); });
 rawBtn.addEventListener('click', () => { currentMode = 'raw'; if (lastJson) rawPrint(lastJson); });
 
-// very small helper to pretty print if possible
-function tryPrettyStored() {
-  if (!lastJson) return;
-  if (currentMode === 'pretty') prettyPrint(lastJson);
-  else rawPrint(lastJson);
-}
-
 // initial UI state
 setStatus('idle');
 setProgress(0);
 
-// simple keyboard shortcut: Ctrl+K focus api
+// keyboard shortcut: Ctrl+K focus api
 window.addEventListener('keydown', (e) => {
   if (e.ctrlKey && e.key.toLowerCase() === 'k') { e.preventDefault(); apiBaseInput.focus(); log('Focus API base (Ctrl+K)'); }
 });
 
-// small utility to attempt reading image dimensions
+// add natural image-dimension metadata when preview loads
 imgPreview.addEventListener('load', () => {
   try {
     const w = imgPreview.naturalWidth;
@@ -312,8 +319,7 @@ imgPreview.addEventListener('load', () => {
   } catch (e){}
 });
 
-// expose a simple abort/cancel by clearing controller
-// if you want an explicit cancel button later, wire this to it
+// Cancel current request helper
 window.cancelCurrent = () => {
   if (xhrController) {
     try { xhrController.abort(); log('Request aborted by user'); setStatus('idle'); setProgress(0); }
@@ -321,7 +327,7 @@ window.cancelCurrent = () => {
   } else log('No active request to cancel');
 };
 
-// small helper to load example image via URL (dev convenience)
+// developer helper to load example images into input
 window.loadExample = (url) => {
   fetch(url).then(r => r.blob()).then(b => {
     const f = new File([b], 'example.png', { type: b.type });
@@ -332,14 +338,13 @@ window.loadExample = (url) => {
   }).catch(e => log('Example load failed: ' + e.message));
 };
 
-// Quick hack: if the page is hosted at a non-root, keep apiBase in sync with the page origin by default
+// default API base heuristic: prefill with origin for convenience
 if (!apiBaseInput.value) {
   const originGuess = (location.origin !== 'null') ? location.origin : '';
   apiBaseInput.value = originGuess;
-  // allow empty too; user can clear to use relative paths
 }
 
-// small helper: if JSON arrives as object, store it and show in preferred mode
+// store + display helper
 function showAndStore(json) {
   try {
     const text = typeof json === 'string' ? json : JSON.stringify(json, null, 2);
@@ -349,6 +354,12 @@ function showAndStore(json) {
     lastJson = String(json);
     rawPrint(lastJson);
   }
+}
+
+function tryPrettyStored() {
+  if (!lastJson) return;
+  if (currentMode === 'pretty') prettyPrint(lastJson);
+  else rawPrint(lastJson);
 }
 
 // override prettyPrint to also set lastJson if object passed

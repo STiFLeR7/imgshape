@@ -1,33 +1,76 @@
-/* style.css — upgraded techy dark UI with subtle glass + neon accents */
+/* style.css — upgraded techy dark UI with subtle glass + neon accents + Liquid Glass tokens */
 :root{
-  --bg-1:#08090b;
-  --bg-2:#0f1113;
+  --bg-1:#060607;             /* top gradient */
+  --bg-2:#0b0b0d;             /* bottom gradient */
   --card:#0f1519;
-  --muted:#9aa3a9;
-  --accent:#6be6ff;
-  --accent-2:#8a7cff;
-  --text:#e6eef3;
-  --glass: rgba(255,255,255,0.02);
-  --radius:14px;
+  --muted:#9AA3A9;
+  --accent:#6BE6FF;
+  --accent-2:#8A7CFF;
+  --text:#FFFFFF;
+  --glass: rgba(255,255,255,0.03);   /* card glass base */
+  --glass-inner: rgba(255,255,255,0.02);
+  --radius:18px;
   --shadow: 0 10px 30px rgba(2,6,23,0.6);
   --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, "Roboto Mono", monospace;
   --glass-border: rgba(255,255,255,0.03);
-  --success:#5fe3a1;
+  --success:#5FE3A1;
+  --liquid-padding:14px;
 }
 
+/* base */
 *{box-sizing:border-box}
 html,body{height:100%;margin:0;background:linear-gradient(180deg,var(--bg-1),var(--bg-2));color:var(--text);font-family:Inter,system-ui,Segoe UI,Roboto,"Helvetica Neue",Arial}
 .topbar{
-  height:64px;display:flex;align-items:center;justify-content:space-between;padding:0 22px;
-  border-bottom:1px solid rgba(255,255,255,0.02);backdrop-filter:blur(4px)
+  height:72px;display:flex;align-items:center;justify-content:space-between;padding:0 22px;
+  border-bottom:1px solid rgba(255,255,255,0.02);
+  backdrop-filter: blur(8px) saturate(1.05);
+  -webkit-backdrop-filter: blur(8px) saturate(1.05);
 }
-.brand{display:flex;align-items:center;gap:10px;font-weight:700;font-size:16px}
-.brand .version{font-size:12px;color:var(--muted);margin-left:6px}
-.logo{opacity:0.9;color:var(--accent-2)}
+
+/* BRAND: liquid glass capsule */
+.brand {
+  display:flex;align-items:center;gap:12px;
+}
+.top-brand { padding:6px; border-radius:20px; }
+
+/* Liquid glass wrapper (re-usable) */
+.liquid-glass {
+  background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(0,0,0,0.02));
+  backdrop-filter: blur(14px) saturate(1.08);
+  -webkit-backdrop-filter: blur(14px) saturate(1.08);
+  border-radius:var(--radius);
+  box-shadow: 0 8px 20px rgba(3,6,12,0.55), inset 0 1px 0 rgba(255,255,255,0.02);
+  border: 1px solid var(--glass-border);
+  padding: var(--liquid-padding);
+  display: inline-flex;
+  align-items: center;
+  gap:12px;
+}
+
+/* brand logo */
+.brand-logo{
+  width:48px;
+  height:48px;
+  border-radius:12px;
+  display:block;
+  object-fit:cover;
+  background: linear-gradient(135deg,var(--accent),var(--accent-2));
+  padding:6px;
+  box-shadow: 0 6px 18px rgba(107,230,255,0.06), 0 1px 2px rgba(0,0,0,0.45);
+  border: 1px solid rgba(255,255,255,0.04);
+}
+
+/* brand text */
+.brand-text { display:flex;flex-direction:column;line-height:1; }
+.app-name{ font-weight:700; font-size:16px; color:var(--text); }
+.version{ font-size:11px; color:var(--muted); margin-top:2px; }
+
+/* nav */
 .nav-right{display:flex;gap:10px;align-items:center}
-.api-base{min-width:260px;padding:8px 10px;border-radius:10px;background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(0,0,0,0.02));border:1px solid var(--glass-border);color:var(--text)}
+.api-base{min-width:260px;padding:8px 10px;border-radius:10px;background:var(--glass);border:1px solid var(--glass-border);color:var(--text)}
 .btn-link{color:var(--accent);text-decoration:none;font-weight:600;font-size:13px}
 
+/* layout */
 .container{display:flex;gap:20px;padding:20px;max-width:1300px;margin:12px auto;width:calc(100% - 48px)}
 .sidebar{width:340px;flex-shrink:0}
 .card{background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(0,0,0,0.02));border-radius:var(--radius);padding:16px;box-shadow:var(--shadow);border:1px solid var(--glass-border)}
@@ -45,7 +88,7 @@ input[type="text"]:focus, .api-base:focus{box-shadow:0 0 18px rgba(106,151,255,0
 .toprow{display:flex;gap:18px}
 .preview{width:360px}
 .preview-panel .panel-head, .output-panel .panel-head, .logs .panel-head {font-weight:800;font-size:13px;margin-bottom:10px}
-.preview-area{min-height:260px;border-radius:10px;padding:12px;background:linear-gradient(180deg, rgba(255,255,255,0.01), rgba(0,0,0,0.02));display:flex;flex-direction:column;gap:12px;align-items:center;justify-content:center;overflow:hidden}
+.preview-area{min-height:260px;border-radius:12px;padding:12px;background:linear-gradient(180deg, rgba(255,255,255,0.01), rgba(0,0,0,0.02));display:flex;flex-direction:column;gap:12px;align-items:center;justify-content:center;overflow:hidden}
 .preview-area img{max-width:100%;max-height:240px;object-fit:contain;border-radius:8px}
 .preview-thumb{width:64px;height:64px;border-radius:8px;background:linear-gradient(180deg, rgba(255,255,255,0.01), rgba(0,0,0,0.02));border:1px solid var(--glass-border)}
 .meta{color:var(--muted);font-size:13px}
@@ -75,4 +118,14 @@ input[type="text"]:focus, .api-base:focus{box-shadow:0 0 18px rgba(106,151,255,0
   .toprow{flex-direction:column}
   .preview{width:100%}
   .sidebar{width:100%}
+}
+
+/* small utility glass surface for preview area to emphasize liquid-glass feel */
+.glass-surface {
+  border-radius:14px;
+  border:1px solid rgba(255,255,255,0.02);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.01);
+  background: linear-gradient(180deg, rgba(255,255,255,0.01), rgba(0,0,0,0.03));
+  backdrop-filter: blur(10px) saturate(1.05);
+  -webkit-backdrop-filter: blur(10px) saturate(1.05);
 }

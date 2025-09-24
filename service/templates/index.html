@@ -5,18 +5,22 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>imgshape · Live (v2.2.0)</title>
   <link rel="stylesheet" href="/static/style.css">
-  <!-- small, neutral system font fallback; no external fonts to keep static deploy simple -->
   <meta name="theme-color" content="#0b0d10">
+  <!-- OpenGraph (helpful for previews) -->
+  <meta property="og:title" content="imgshape" />
+  <meta property="og:description" content="Dataset & image readiness analysis for AI/ML." />
+  <meta property="og:image" content="/static/assets/imgshape_lg.png" />
 </head>
 <body>
   <nav class="topbar">
-    <div class="brand">
-      <svg class="logo" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
-        <rect x="2" y="2" width="20" height="20" rx="4" fill="none" stroke="currentColor" stroke-width="1.2"/>
-        <path d="M7 15 L12 9 L17 15" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
-      </svg>
-      imgshape <span class="version">v2.2.0</span>
+    <div class="brand liquid-glass top-brand" role="banner" aria-label="imgshape brand">
+      <img id="brandLogo" class="brand-logo" src="assets\\sample_images\\imgshape_lg.png" alt="imgshape logo" />
+      <div class="brand-text">
+        <div class="app-name">imgshape</div>
+        <div class="version">v2.2.0</div>
+      </div>
     </div>
+
     <div class="nav-right">
       <input id="apiBase" class="api-base" placeholder="API base (defaults to /)" title="Set API base (optional)" />
       <a id="help-link" class="btn-link" href="#" target="_blank">Docs</a>
@@ -72,7 +76,7 @@
       <div class="toprow">
         <div class="panel card preview-panel">
           <div class="panel-head">Preview</div>
-          <div id="preview" class="preview-area">
+          <div id="preview" class="preview-area glass-surface">
             <img id="imgPreview" alt="preview" />
             <div id="imgMeta" class="meta"></div>
           </div>
