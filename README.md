@@ -2,7 +2,7 @@
 
 `imgshape` is a Python toolkit for **image shape detection**, **dataset inspection**, **preprocessing & augmentation recommendations**, **visualization**, **report generation**, and **PyTorch DataLoader helpers** — making it a **smarter dataset assistant** for ML/DL workflows.
 
-![imgshape demo](assets/sample_images/Image_created_with_a_mobile_phone.png)
+![imgshape demo](assets/sample_images/imgshape.png)
 [![PyPI Downloads](https://static.pepy.tech/personalized-badge/imgshape?period=total\&units=INTERNATIONAL_SYSTEM\&left_color=BLACK\&right_color=GREEN\&left_text=downloads)](https://pepy.tech/projects/imgshape)
 -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
