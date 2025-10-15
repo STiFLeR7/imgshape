@@ -2,9 +2,9 @@ name: imgshape CI
 
 on:
   push:
-    branches: ["master", "main"]
+    branches: [ "master", "main" ]
   pull_request:
-    branches: ["master", "main"]
+    branches: [ "master", "main" ]
 
 permissions:
   contents: read
@@ -33,17 +33,48 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-pip-
 
-      - name: Install system deps (runtime libs)
+      - name: Install system deps (robust apt-get)
+        shell: bash
         run: |
-          sudo apt-get update -y
-          sudo apt-get install -y libgl1-mesa-glx libglib2.0-0
+          set -euo pipefail
+          export DEBIAN_FRONTEND=noninteractive
+          # apt options: increase http timeout & enable retries at apt level
+          APT_OPTS="-o Acquire::Retries=3 -o Acquire::http::Timeout=60 -o Acquire::https::Timeout=60"
+
+          echo "Updating apt indexes (retries=3)..."
+          attempt=0
+          max=3
+          until [ $attempt -ge $max ]
+          do
+            attempt=$((attempt+1))
+            if sudo apt-get $APT_OPTS update -qq; then
+              echo "apt-get update succeeded on attempt $attempt"
+              break
+            else
+              echo "apt-get update failed on attempt $attempt; sleeping before retry..."
+              sleep $((attempt * 4))
+            fi
+          done
+
+          echo "Installing minimal runtime libs (no recommends) ..."
+          sudo apt-get install -y --no-install-recommends libgl1-mesa-glx libglib2.0-0 ca-certificates || {
+            echo "apt-get install failed — printing apt logs for debugging" >&2
+            # show some apt debug info
+            apt-cache policy libgl1-mesa-glx || true
+            exit 1
+          }
+
+          echo "apt-get step completed"
 
       - name: Install package in editable mode with extras (dev + full)
+        shell: bash
         run: |
           python -m pip install --upgrade pip wheel setuptools build
-          pip install -e ".[dev,full]"
+          # install editable with extras (dev + full). If full fails due to environment, try a lighter set.
+          pip install -e ".[dev,full]" || pip install -e ".[dev]"
 
       - name: Prepare test image
+        shell: bash
         run: |
           mkdir -p sample
           if [ -f assets/sample_images/Image_created_with_a_mobile_phone.png ]; then
@@ -55,31 +86,33 @@ jobs:
             fi
           fi
 
-      - name: Lint (flake8)
+      - name: Lint (flake8) — non-blocking
+        shell: bash
         run: |
           pip install flake8
           flake8 src tests || true
 
-      - name: Type-check (mypy)
+      - name: Type-check (mypy) — non-blocking
+        shell: bash
         run: |
           pip install mypy
           mypy src || true
 
-      # ---- CLI Smoke Tests (non-blocking/gentle) ----
+      # ---- CLI Smoke Tests ----
       - name: CLI Test - Help
-        run: imgshape --help || true
+        run: imgshape --help
 
       - name: CLI Test - Version
         run: imgshape --version || true
 
       - name: CLI Test - Shape detection
-        run: python -m imgshape.cli --path sample/test.png --shape || true
+        run: python -m imgshape.cli --path sample/test.png --shape
 
       - name: CLI Test - Analysis
-        run: python -m imgshape.cli --path sample/test.png --analyze || true
+        run: python -m imgshape.cli --path sample/test.png --analyze
 
       - name: CLI Test - Recommendation
-        run: python -m imgshape.cli --path sample/test.png --recommend --augment || true
+        run: python -m imgshape.cli --path sample/test.png --recommend --augment
 
       - name: CLI Test - Report (Markdown)
         run: python -m imgshape.cli --path sample --report --augment --out tmp/ci_report.md || true
@@ -87,54 +120,53 @@ jobs:
       - name: CLI Test - Report (HTML)
         run: python -m imgshape.cli --path sample --report --augment --out tmp/ci_report.html || true
 
-      - name: CLI Test - Visualization (non-blocking)
+      - name: CLI Test - Visualization (non-blocking) — robust script
         shell: bash
         run: |
-          echo "Running visualization smoke test (safe, no heredoc)..."
+          echo "Writing small helper script to /tmp/plot_test.py and running it..."
           SCRIPT_PATH="/tmp/plot_test.py"
-          # Use printf with escaped newlines to avoid YAML/heredoc issues in editors
-          printf '%s\n' "import sys" \
-            "from pathlib import Path" \
-            "" \
-            "try:" \
-            "    from imgshape.viz import plot_shape_distribution" \
-            "except Exception as e:" \
-            "    print('Could not import imgshape.viz:', e, file=sys.stderr)" \
-            "    sys.exit(0)" \
-            "" \
-            "try:" \
-            "    out = plot_shape_distribution('sample', save=False)" \
-            "    print('plot result type:', type(out))" \
-            "    try:" \
-            "        if hasattr(out, 'write_html'):" \
-            "            Path('tmp').mkdir(parents=True, exist_ok=True)" \
-            "            out.write_html('tmp/ci_shape_plot.html')" \
-            "            print('Wrote tmp/ci_shape_plot.html')" \
-            "    except Exception as ex:" \
-            "        print('Could not write interactive plot (allowed):', ex)" \
-            "except Exception as e:" \
-            "    print('plot_shape_distribution failed (allowed):', e, file=sys.stderr)" \
-            > "$SCRIPT_PATH"
+          cat > "$SCRIPT_PATH" <<'PY'
+#!/usr/bin/env python3
+import sys
+from pathlib import Path
+try:
+    from imgshape.viz import plot_shape_distribution
+except Exception as e:
+    print("Could not import imgshape.viz:", e, file=sys.stderr)
+    sys.exit(0)
+
+try:
+    out = plot_shape_distribution("sample", save=False)
+    print("plot result type:", type(out))
+    # If plot returns a plotly figure, try writing an HTML to ensure path-writing works
+    try:
+        if hasattr(out, "write_html"):
+            Path("tmp").mkdir(parents=True, exist_ok=True)
+            out.write_html("tmp/ci_shape_plot.html")
+            print("Wrote tmp/ci_shape_plot.html")
+    except Exception as ex:
+        print("Could not write interactive plot (allowed):", ex, file=sys.stderr)
+except Exception as e:
+    print("plot_shape_distribution failed (allowed):", e, file=sys.stderr)
+PY
           python "$SCRIPT_PATH" || true
 
       - name: CLI Test - Model Compatibility (non-blocking)
         run: python -m imgshape.cli --dir sample --check mobilenet_v2 || true
 
-      - name: CLI Test - TorchLoader (transform snippet, non-blocking)
+      - name: CLI Test - TorchLoader (transform snippet)
         run: python -m imgshape.cli --path sample --torchloader --out tmp/transform_snippet.py || true
 
-      # ---- Unit Tests ----
       - name: Run pytest
         run: pytest -q --disable-warnings --maxfail=1
 
-      # ---- Build & metadata checks ----
       - name: Build distributions
         run: python -m build
 
       - name: Twine check
         run: |
           pip install twine
-          twine check dist/* || true
+          twine check dist/*
 
       - name: Upload artifacts (test logs + distributions)
         if: always()
@@ -142,8 +174,9 @@ jobs:
         with:
           name: ci-artifacts
           path: |
-            dist
-            build
-            tmp || true
-            imgshape_report.* || true
-            pytest-report.xml || true
+            dist/**
+            build/**
+            tmp/**
+            imgshape_report.* 
+            pytest-report.xml
+
