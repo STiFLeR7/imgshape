@@ -1,12 +1,13 @@
 # src/imgshape/__init__.py
 """
-imgshape package public API (v2.2.0) — lazy exports + safe optional telemetry.
+imgshape package public API (v2.2.0 -> v3.0.0) — lazy exports + safe optional telemetry.
 
 Behavior:
 - Avoid importing heavy submodules at import-time.
 - Provide the same top-level names as before via lazy import on attribute access.
 - Telemetry (klyne) is initialized only when env var KLYNE_API_KEY is present.
 - Safe: import-time failures are swallowed so users don't get ImportError when optional deps are missing.
+- v3 additions: pipeline, recommender & plugin helpers exposed lazily.
 """
 
 from __future__ import annotations
@@ -18,13 +19,34 @@ from typing import Any
 
 # Public names we want to expose lazily
 __all__ = [
+    # shape / analyze
+    "get_shape",
+    "get_shape_batch",
+    "analyze_type",
+    "analyze_dataset",
+    "plot_shape_distribution",
+    # augmentations (v2)
     "AugmentationRecommender",
     "AugmentationPlan",
+    # reports (v2)
     "generate_markdown_report",
     "generate_html_report",
     "generate_pdf_report",
+    # torchloader (v2)
     "to_torch_transform",
     "to_dataloader",
+    # recommender (v3)
+    "RecommendEngine",
+    "recommend_preprocessing",
+    "recommend_dataset",
+    # pipeline & plugins (v3)
+    "RecommendationPipeline",
+    "PipelineStep",
+    "load_plugins_from_dir",
+    "PluginBase",
+    "AnalyzerPlugin",
+    "RecommenderPlugin",
+    "ExporterPlugin",
     "__version__",
 ]
 
@@ -38,19 +60,39 @@ except Exception:
     except Exception:
         __version__ = "0.0.0"
 
+
 # --- mapping attribute name -> (submodule, attr_name) for lazy import ---
 _lazy_map = {
-    # augmentations
+    # shape & analysis
+    "get_shape": ("imgshape.shape", "get_shape"),
+    "get_shape_batch": ("imgshape.shape", "get_shape_batch"),
+    "analyze_type": ("imgshape.analyze", "analyze_type"),
+    "analyze_dataset": ("imgshape.analyze", "analyze_dataset"),
+    "plot_shape_distribution": ("imgshape.viz", "plot_shape_distribution"),
+    # augmentations (v2)
     "AugmentationRecommender": ("imgshape.augmentations", "AugmentationRecommender"),
     "AugmentationPlan": ("imgshape.augmentations", "AugmentationPlan"),
-    # reports
+    # reports (v2)
     "generate_markdown_report": ("imgshape.report", "generate_markdown_report"),
     "generate_html_report": ("imgshape.report", "generate_html_report"),
     "generate_pdf_report": ("imgshape.report", "generate_pdf_report"),
-    # torchloader
+    # torchloader (v2)
     "to_torch_transform": ("imgshape.torchloader", "to_torch_transform"),
     "to_dataloader": ("imgshape.torchloader", "to_dataloader"),
+    # recommender (v3)
+    "RecommendEngine": ("imgshape.recommender", "RecommendEngine"),
+    "recommend_preprocessing": ("imgshape.recommender", "recommend_preprocessing"),
+    "recommend_dataset": ("imgshape.recommender", "recommend_dataset"),
+    # pipeline & plugins (v3)
+    "RecommendationPipeline": ("imgshape.pipeline", "RecommendationPipeline"),
+    "PipelineStep": ("imgshape.pipeline", "PipelineStep"),
+    "load_plugins_from_dir": ("imgshape.plugins", "load_plugins_from_dir"),
+    "PluginBase": ("imgshape.plugins", "PluginBase"),
+    "AnalyzerPlugin": ("imgshape.plugins", "AnalyzerPlugin"),
+    "RecommenderPlugin": ("imgshape.plugins", "RecommenderPlugin"),
+    "ExporterPlugin": ("imgshape.plugins", "ExporterPlugin"),
 }
+
 
 # --- helpers for lazy import ---
 def _lazy_import(name: str):
@@ -66,7 +108,11 @@ def _lazy_import(name: str):
         return getattr(module, attr)
     except Exception as exc:
         # Wrap and raise AttributeError for nicer UX when attribute is missing
-        raise AttributeError(f"Could not import {attr} from {mod_name}: {exc}") from exc
+        raise AttributeError(
+            f"Could not import {attr!r} from {mod_name!r}. "
+            "Optional dependency may be missing or import failed. "
+            f"Original error: {exc}"
+        ) from exc
 
 
 def __getattr__(name: str) -> Any:
@@ -79,7 +125,8 @@ def __getattr__(name: str) -> Any:
 
 def __dir__() -> list[str]:
     # Provide nice tab-completion: show lazy names plus regular module attributes
-    return sorted(list(globals().keys()) + list(_lazy_map.keys()))
+    names = list(globals().keys()) + list(_lazy_map.keys())
+    return sorted(set(names))
 
 
 # --- Safe Klyne analytics init (non-fatal) ---

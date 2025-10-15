@@ -1,10 +1,11 @@
 # src/imgshape/analyze.py
 """
-analyze.py — robust image/dataset analysis for imgshape v2.2.0
+analyze.py — robust image/dataset analysis for imgshape v3 (backwards-compatible)
 
-Robust opening of images (paths, bytes, file-like, URLs if allowed),
-per-image analysis (meta, entropy, suggestions, guess_type) and
-dataset aggregation (analyze_dataset).
+Improvements over v2:
+- analyze_dataset distinguishes between a single-file path and a directory.
+- Scanner ignores obvious temp/cache/hidden folders (e.g. .streamlit uploads/tmp/cache).
+- Defensive behavior: never raises; returns structured error dicts.
 """
 
 from __future__ import annotations
@@ -34,7 +35,6 @@ def _open_image_from_path(path: Path) -> Optional[Image.Image]:
     try:
         if not path.exists() or not path.is_file():
             return None
-        # Use PIL open directly (avoid some file-like quirks)
         img = Image.open(path)
         try:
             return img.convert("RGB")
@@ -269,6 +269,21 @@ def _guess_image_type(meta: Dict[str, Any], entropy: Optional[float]) -> str:
         return "unknown"
 
 
+def _is_probable_temp_or_hidden(path: Path) -> bool:
+    """
+    Heuristic to skip Streamlit/temp/cache/hidden folders when scanning datasets.
+    Avoids counting upload caches and developer temp files.
+    """
+    s = str(path).lower()
+    # skip hidden filenames / directories starting with '.' or containing common temp/cache names
+    if any(part.startswith(".") for part in path.parts):
+        return True
+    for token in (".streamlit", "uploads", "tmp", "temp", "cache", "thumbs"):
+        if token in s:
+            return True
+    return False
+
+
 # ----------------------
 # Public API
 # ----------------------
@@ -315,32 +330,76 @@ def analyze_dataset(dataset_input: Any, sample_limit: int = 200) -> Dict[str, An
     """
     Analyze a dataset (directory path or iterable of image-like objects).
     Returns aggregated stats including counts, entropy, shapes, channels.
+
+    Behavior improvements:
+    - If dataset_input is a file path, treat it as a single-image dataset.
+    - Skip obvious cache/temp/hidden folders to avoid counting upload caches.
     """
     try:
         items: List[Any] = []
+
+        # If a string/path, try to resolve candidates and decide if it's a file or directory.
         if isinstance(dataset_input, (str, Path)):
             p = Path(dataset_input).expanduser()
-            if not p.exists() or not p.is_dir():
-                # try some fallbacks (cwd, repo)
-                candidates = [p, Path.cwd() / p]
-                try:
-                    repo_candidate = Path(__file__).resolve().parents[2] / p
-                    candidates.append(repo_candidate)
-                except Exception:
-                    pass
+            # if exact file -> treat as single-image dataset
+            if p.exists() and p.is_file():
+                # single file input -> return a dataset-like summary for the single image
+                pil = _open_image_from_input(p)
+                if pil is None:
+                    return {"error": f"Could not open file: {str(p)}"}
+                meta = _safe_meta(pil)
+                ent = _entropy_from_image(pil)
+                sample_summary = analyze_type(pil)
+                return {
+                    "image_count": 1,
+                    "unique_shapes": {f"{meta.get('width')}x{meta.get('height')}": 1} if meta else {},
+                    "most_common_shape": f"{meta.get('width')}x{meta.get('height')}" if meta else None,
+                    "most_common_shape_count": 1,
+                    "channels_distribution": {meta.get("channels"): 1} if meta else {},
+                    "avg_entropy": ent,
+                    "sample_summaries": [sample_summary],
+                    "unreadable_count": 0,
+                    "sampled_paths_count": 1,
+                    "shapes": [(int(meta.get("width")), int(meta.get("height")))] if meta else [],
+                    "channels": [meta.get("channels")] if meta else [],
+                    "min_entropy": ent,
+                    "max_entropy": ent,
+                }
+
+            # if it's not a file, try to find a directory candidate
+            if p.exists() and p.is_dir():
+                base_dir = p
+            else:
+                # fallbacks: cwd/p, repo-relative, assets/
                 found = None
+                candidates = _string_candidates(str(p))
                 for c in candidates:
-                    if c.exists() and c.is_dir():
-                        found = c
-                        break
+                    try:
+                        if c.exists() and c.is_dir():
+                            found = c
+                            break
+                    except Exception:
+                        continue
                 if found is None:
                     return {"error": f"Dataset path invalid: {dataset_input}"}
-                p = found
+                base_dir = found
+
             exts = {".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff", ".webp", ".gif"}
-            for f in sorted(p.rglob("*")):
-                if f.is_file() and f.suffix.lower() in exts:
-                    items.append(f)
+            # Walk and collect image files, but skip probable temp/hidden folders
+            for f in sorted(base_dir.rglob("*")):
+                try:
+                    if not f.is_file():
+                        continue
+                    # skip hidden / temp paths heuristically
+                    if _is_probable_temp_or_hidden(f) or _is_probable_temp_or_hidden(f.parent):
+                        logger.debug("Skipping probable temp/hidden file: %s", f)
+                        continue
+                    if f.suffix and f.suffix.lower() in exts:
+                        items.append(f)
+                except Exception:
+                    logger.debug("Error inspecting file during dataset scan: %s", f, exc_info=True)
             items = items[:sample_limit]
+
         elif isinstance(dataset_input, Iterable):
             items = list(dataset_input)[:sample_limit]
         else:

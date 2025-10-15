@@ -1,0 +1,10 @@
+name: medical
+description: "High-resolution medical images. Prefer controlled augmentations."
+preprocessing:
+  - { name: "resize", spec: { resize: [512, 512] } }
+  - { name: "center_crop", spec: { center_crop: 448 } }
+augmentations:
+  - { name: "contrast", spec: { factor: 0.1 } }
+  - { name: "gaussian_noise", spec: { std: 0.01 } }
+meta:
+  confidence: high

@@ -1,0 +1,9 @@
+name: edge
+description: "Edge device profile — low-res, quantization-friendly."
+preprocessing:
+  - { name: "resize", spec: { resize: [160, 160] } }
+  - { name: "normalize", spec: { mean: [0.5, 0.5, 0.5], std: [0.5, 0.5, 0.5] } }
+augmentations:
+  - { name: "random_flip", spec: { p: 0.5 } }
+meta:
+  confidence: medium

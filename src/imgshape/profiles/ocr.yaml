@@ -1,0 +1,9 @@
+name: ocr
+description: "OCR dataset profile — preserve aspect ratio, grayscale."
+preprocessing:
+  - { name: "resize", spec: { resize: [800, 128] } }
+  - { name: "grayscale", spec: {} }
+augmentations:
+  - { name: "brightness", spec: { factor: 0.05 } }
+meta:
+  confidence: medium

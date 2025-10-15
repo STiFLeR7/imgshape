@@ -1,250 +1,202 @@
 # src/imgshape/viz.py
 """
-Visualization utilities for imgshape v2.2.0
+viz.py — imgshape v3 interactive visualization utilities.
 
-Provides histograms, scatter plots, and simple distribution summaries
-for dataset image sizes and shapes.
+Supports:
+- Interactive histograms and scatter plots (Plotly)
+- Fallback to Matplotlib for headless environments
+- Non-fatal imports: no hard dependency on Plotly
 
-All functions are defensive: they handle empty folders, unreadable files,
-and can either display plots or save them to disk. Functions return the
-output path (if saved) or None when shown interactively. A convenience
-function returns a dict of generated artefacts.
+Usage:
+    from imgshape.viz import plot_shape_distribution
+    fig = plot_shape_distribution("dataset/")
+    fig.show()  # works interactively in Jupyter/Streamlit
 """
 
 from __future__ import annotations
 import os
-from pathlib import Path
-import matplotlib.pyplot as plt
-from collections import Counter
-from typing import List, Dict, Tuple, Optional, Union
+import json
 import logging
+from pathlib import Path
+from typing import Optional, List, Tuple, Dict
 
-from imgshape.shape import get_shape_batch
+import numpy as np
+from PIL import Image
+
+# optional imports
+try:
+    import plotly.express as px
+    import plotly.graph_objects as go
+    HAS_PLOTLY = True
+except Exception:
+    HAS_PLOTLY = False
+
+try:
+    import matplotlib.pyplot as plt
+    HAS_MPL = True
+except Exception:
+    HAS_MPL = False
 
 logger = logging.getLogger("imgshape.viz")
 if not logger.handlers:
     ch = logging.StreamHandler()
-    ch.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s"))
+    ch.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s"))
     logger.addHandler(ch)
 logger.setLevel(logging.INFO)
 
 
-# -------------------------------
-# Helpers
-# -------------------------------
-
-def _ensure_outdir(out_dir: Union[str, Path]) -> Path:
-    p = Path(out_dir)
-    p.mkdir(parents=True, exist_ok=True)
-    return p
-
-
-def _shapes_from_folder(folder_path: Union[str, Path], recursive: bool = True, include_errors: bool = False):
+def _get_image_shapes(dataset_path: str, max_samples: int = 1000) -> List[Tuple[int, int]]:
     """
-    Wrapper around get_shape_batch which accepts folder path and returns lists of widths, heights, channels.
-    Returns (widths, heights, channels, errors)
+    Collect image shapes from a dataset folder.
+    Returns list of (width, height) tuples.
     """
-    p = Path(folder_path)
+    shapes = []
+    p = Path(dataset_path)
     if not p.exists():
-        logger.warning("Folder does not exist: %s", folder_path)
-        return [], [], [], [{"error": "folder_not_found", "path": str(folder_path)}]
+        logger.warning("Dataset path does not exist: %s", dataset_path)
+        return []
 
-    try:
-        shapes = get_shape_batch(str(folder_path), recursive=recursive, include_errors=include_errors)
-    except Exception as e:
-        logger.warning("get_shape_batch failed: %s", e)
-        return [], [], [], [{"error": "shape_batch_failed", "detail": str(e)}]
+    exts = {".jpg", ".jpeg", ".png", ".bmp", ".tiff", ".webp"}
+    for img_path in p.rglob("*"):
+        if img_path.suffix.lower() in exts:
+            try:
+                with Image.open(img_path) as im:
+                    shapes.append(im.size)  # (width, height)
+            except Exception as e:
+                logger.debug("Failed to open %s: %s", img_path, e)
+        if len(shapes) >= max_samples:
+            break
+    return shapes
 
-    widths: List[int] = []
-    heights: List[int] = []
-    channels: List[int] = []
-    errors: List[Dict] = []
-
-    for item in shapes:
-        if isinstance(item, tuple) and len(item) == 3:
-            h, w, c = item
-            widths.append(w)
-            heights.append(h)
-            channels.append(c)
-        elif isinstance(item, dict):
-            errors.append(item)
-
-    return widths, heights, channels, errors
-
-
-# -------------------------------
-# Plot functions
-# -------------------------------
 
 def plot_shape_distribution(
-    folder_path: Union[str, Path],
+    dataset_path: str,
     save: bool = False,
-    out_dir: str = "output",
-    figsize: Tuple[int, int] = (10, 4),
-    bins: int = 20,
-    recursive: bool = True,
-) -> Optional[str]:
+    output_path: Optional[str] = None,
+    interactive: Optional[bool] = None,
+):
     """
-    Plot histogram of width and height distributions for a dataset directory.
+    Plot the width/height distribution of images in the dataset.
+    Returns a figure object (Plotly or Matplotlib) for embedding.
 
-    Returns path if saved, else None (plots interactively).
+    Parameters
+    ----------
+    dataset_path : str
+        Path to dataset root
+    save : bool, optional
+        Save static figure to file if True
+    output_path : str, optional
+        If save=True, specify where to write PNG/HTML
+    interactive : bool, optional
+        Force Plotly (True) or Matplotlib (False).
+        If None, auto-detects based on Plotly availability.
     """
-    widths, heights, _, errors = _shapes_from_folder(folder_path, recursive=recursive)
-    if not widths and not heights:
-        logger.info("No images found in %s", folder_path)
-        # Create a tiny empty figure with message
-        fig, ax = plt.subplots(figsize=figsize)
-        ax.text(0.5, 0.5, "No images found to plot", ha="center", va="center", fontsize=12)
-        ax.axis("off")
+    shapes = _get_image_shapes(dataset_path)
+    if not shapes:
+        logger.warning("No images found for visualization in %s", dataset_path)
+        return None
+
+    widths, heights = zip(*shapes)
+    aspect_ratios = np.array(widths) / np.array(heights)
+    total = len(shapes)
+
+    use_plotly = interactive if interactive is not None else HAS_PLOTLY
+
+    if use_plotly:
+        # --- Plotly Interactive ---
+        logger.info("Using Plotly for interactive visualization.")
+        df = {
+            "width": widths,
+            "height": heights,
+            "aspect_ratio": aspect_ratios,
+        }
+
+        fig = go.Figure()
+        fig.add_trace(
+            go.Scatter(
+                x=widths,
+                y=heights,
+                mode="markers",
+                marker=dict(
+                    size=6,
+                    color=aspect_ratios,
+                    colorscale="Viridis",
+                    showscale=True,
+                    colorbar=dict(title="Aspect Ratio"),
+                ),
+                name="Images",
+            )
+        )
+        fig.update_layout(
+            title=f"📊 Image Shape Distribution — {Path(dataset_path).name} ({total} samples)",
+            xaxis_title="Width (px)",
+            yaxis_title="Height (px)",
+            template="plotly_white",
+            hovermode="closest",
+        )
+
+        # Save as HTML if requested
         if save:
-            outp = _ensure_outdir(out_dir) / "shape_distribution.png"
-            fig.savefig(outp, dpi=150, bbox_inches="tight")
-            plt.close(fig)
-            return str(outp)
-        else:
-            plt.show()
-            plt.close(fig)
-            return None
+            output_path = output_path or str(Path(dataset_path).joinpath("shape_distribution.html"))
+            try:
+                fig.write_html(output_path)
+                logger.info("Saved interactive HTML plot to %s", output_path)
+            except Exception as e:
+                logger.error("Failed to save HTML plot: %s", e)
+        return fig
 
-    fig, ax = plt.subplots(figsize=figsize)
-    # If only a single sample, show both as single-bar hist with annotations
-    if len(widths) == 1 and len(heights) == 1:
-        w, h = widths[0], heights[0]
-        ax.bar([0, 1], [1, 1], tick_label=[f"W:{w}px", f"H:{h}px"], color=["#5DADE2", "#F5B041"], alpha=0.8)
-        ax.set_ylabel("Count")
-        ax.set_title("Single-sample Image Shape")
-    else:
-        ax.hist(widths, bins=bins, alpha=0.6, label="Widths (px)")
-        ax.hist(heights, bins=bins, alpha=0.6, label="Heights (px)")
-        ax.set_xlabel("Pixels")
-        ax.set_ylabel("Frequency")
-        ax.set_title("Image Width/Height Distribution")
-        ax.legend()
+    elif HAS_MPL:
+        # --- Matplotlib fallback ---
+        logger.info("Using Matplotlib fallback (non-interactive).")
+        plt.figure(figsize=(7, 6))
+        plt.scatter(widths, heights, alpha=0.6, c=aspect_ratios, cmap="viridis")
+        plt.xlabel("Width (px)")
+        plt.ylabel("Height (px)")
+        plt.title(f"Image Shape Distribution — {Path(dataset_path).name} ({total} samples)")
+        plt.colorbar(label="Aspect Ratio")
 
-    plt.tight_layout()
-    if save:
-        outp = _ensure_outdir(out_dir) / "shape_distribution.png"
-        fig.savefig(outp, dpi=150, bbox_inches="tight")
-        plt.close(fig)
-        logger.info("Saved shape distribution to %s", outp)
-        return str(outp)
-    else:
-        plt.show()
-        plt.close(fig)
-        return None
-
-
-def plot_image_dimensions(
-    folder_path: Union[str, Path],
-    save: bool = False,
-    out_dir: str = "output",
-    figsize: Tuple[int, int] = (6, 6),
-    recursive: bool = True,
-) -> Optional[str]:
-    """
-    Scatter plot of image (width, height) pairs. Annotates single samples for clarity.
-    """
-    widths, heights, _, errors = _shapes_from_folder(folder_path, recursive=recursive)
-    fig, ax = plt.subplots(figsize=figsize)
-
-    if not widths:
-        logger.info("No images found in %s", folder_path)
-        ax.text(0.5, 0.5, "No images found to plot", ha="center", va="center", fontsize=12)
-        ax.axis("off")
-    elif len(widths) == 1:
-        w, h = widths[0], heights[0]
-        ax.scatter([w], [h], s=300, alpha=0.9, edgecolors="black", zorder=3)
-        ax.annotate(f"{w}×{h}", (w, h), textcoords="offset points", xytext=(10, 10))
-        margin = max(100, int(0.05 * max(w, h)))
-        ax.set_xlim(w - margin, w + margin)
-        ax.set_ylim(h - margin, h + margin)
-        ax.set_xlabel("Width (px)")
-        ax.set_ylabel("Height (px)")
-    else:
-        ax.scatter(widths, heights, alpha=0.6, c="#48C9B0", edgecolors="black")
-        ax.set_xlabel("Width (px)")
-        ax.set_ylabel("Height (px)")
-
-    ax.set_title("Image Dimension Scatter Plot")
-    ax.grid(True, linestyle="--", alpha=0.4)
-    plt.tight_layout()
-
-    if save:
-        outp = _ensure_outdir(out_dir) / "dimension_scatter.png"
-        fig.savefig(outp, dpi=150, bbox_inches="tight")
-        plt.close(fig)
-        logger.info("Saved dimension scatter to %s", outp)
-        return str(outp)
-    else:
-        plt.show()
-        plt.close(fig)
-        return None
-
-
-def plot_channel_distribution(
-    folder_path: Union[str, Path],
-    save: bool = False,
-    out_dir: str = "output",
-    figsize: Tuple[int, int] = (5, 4),
-    recursive: bool = True,
-) -> Optional[str]:
-    """
-    Bar chart showing counts of channel types (1, 3, 4, ...).
-    """
-    _, _, channels, errors = _shapes_from_folder(folder_path, recursive=recursive)
-    counts = Counter(channels)
-    if not counts:
-        logger.info("No channel information found in %s", folder_path)
-        fig, ax = plt.subplots(figsize=figsize)
-        ax.text(0.5, 0.5, "No images found", ha="center", va="center")
-        ax.axis("off")
         if save:
-            outp = _ensure_outdir(out_dir) / "channel_distribution.png"
-            fig.savefig(outp, dpi=150, bbox_inches="tight")
-            plt.close(fig)
-            return str(outp)
-        else:
-            plt.show()
-            plt.close(fig)
-            return None
+            output_path = output_path or str(Path(dataset_path).joinpath("shape_distribution.png"))
+            plt.savefig(output_path, dpi=120, bbox_inches="tight")
+            logger.info("Saved static PNG plot to %s", output_path)
 
-    labels = [f"{k} ch" for k in counts.keys()]
-    values = list(counts.values())
-
-    fig, ax = plt.subplots(figsize=figsize)
-    ax.bar(labels, values, color="#9B59B6", alpha=0.8)
-    ax.set_ylabel("Count")
-    ax.set_title("Channel Distribution")
-    plt.tight_layout()
-
-    if save:
-        outp = _ensure_outdir(out_dir) / "channel_distribution.png"
-        fig.savefig(outp, dpi=150, bbox_inches="tight")
-        plt.close(fig)
-        logger.info("Saved channel distribution to %s", outp)
-        return str(outp)
+        plt.close()
+        return None
     else:
-        plt.show()
-        plt.close(fig)
+        logger.warning("Neither Plotly nor Matplotlib available. Install one for visualization.")
         return None
 
 
-def plot_dataset_distribution(
-    folder_path: Union[str, Path],
-    save: bool = False,
-    out_dir: str = "output",
-    recursive: bool = True,
-) -> Dict[str, Optional[str]]:
+def plot_entropy_distribution(entropy_values: List[float], title: str = "Entropy Distribution", interactive: Optional[bool] = None):
     """
-    Convenience function: generate all distribution plots (size hist, scatter, channel).
+    Plot entropy value distribution (useful for dataset analysis).
+    Returns Plotly Figure if available, else None.
+    """
+    if not entropy_values:
+        logger.warning("Empty entropy values; skipping plot.")
+        return None
 
-    Returns a dict of saved file paths (if save=True) or None values (if shown interactively).
-    """
-    results: Dict[str, Optional[str]] = {}
-    results["size_hist"] = plot_shape_distribution(folder_path, save=save, out_dir=out_dir, recursive=recursive)
-    results["scatter"] = plot_image_dimensions(folder_path, save=save, out_dir=out_dir, recursive=recursive)
-    results["channels"] = plot_channel_distribution(folder_path, save=save, out_dir=out_dir, recursive=recursive)
-    # Remove None entries if saving to disk
-    if save:
-        return {k: v for k, v in results.items() if v}
-    return results
+    use_plotly = interactive if interactive is not None else HAS_PLOTLY
+    if use_plotly:
+        import plotly.express as px
+
+        fig = px.histogram(
+            x=entropy_values,
+            nbins=30,
+            title=title,
+            labels={"x": "Entropy", "y": "Frequency"},
+            color_discrete_sequence=["#636EFA"],
+        )
+        fig.update_layout(template="plotly_white")
+        return fig
+    elif HAS_MPL:
+        plt.figure(figsize=(6, 4))
+        plt.hist(entropy_values, bins=30, color="#636EFA", alpha=0.8)
+        plt.title(title)
+        plt.xlabel("Entropy")
+        plt.ylabel("Frequency")
+        plt.close()
+        return None
+    else:
+        logger.warning("Plotly/Matplotlib not installed; cannot plot entropy distribution.")
+        return None

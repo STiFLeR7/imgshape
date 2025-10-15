@@ -1,0 +1,9 @@
+name: satellite
+description: "Satellite imagery: rotation and light color jitter."
+preprocessing:
+  - { name: "resize", spec: { resize: [512, 512] } }
+augmentations:
+  - { name: "random_rotate", spec: { degrees: 15 } }
+  - { name: "color_jitter", spec: { brightness: 0.1, contrast: 0.1, saturation: 0.05 } }
+meta:
+  confidence: medium
