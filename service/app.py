@@ -1,24 +1,15 @@
 # service/app.py
 """
-FastAPI wrapper for imgshape v2.2.0 — robust archive support
+FastAPI wrapper for imgshape v3.0.0 — robust archive support + UI integration
 
-This version extends dataset acquisition to support:
- - .zip
- - .tar
- - .tar.gz / .tgz
- - .tar.bz2
-
-Behavior:
- - When given a dataset_name that maps to a remote URL in DATASET_REGISTRY,
-   the server downloads the archive to a temp file (streaming, size-limited),
-   then safely extracts it (no path traversal) into the target folder.
- - Uploaded dataset archives (zip/tar/..) are also accepted and extracted safely.
- - Legacy: dataset_path (server-side absolute path) still supported.
- - Temporary extraction directories are cleaned up after use.
-
-Security & limits:
- - Max remote download size is controlled by MAX_REMOTE_BYTES (env override).
- - Max extracted files (per archive) limited via MAX_EXTRACT_FILES to avoid DoS.
+Improvements over previous version:
+- CORS middleware (configurable via IMGSHAPE_CORS_ORIGINS)
+- UI template now receives endpoint URLs (analyze/recommend/compatibility/etc.)
+- /analyze and /recommend accept either an uploaded file OR a server-side dataset_path
+  (file takes precedence). This enables the static UI to call endpoints without special JS wiring.
+- Improved streaming/error handling and logging
+- Startup log that prints effective config
+- Small safety hardening: resolved path checks, deterministic temp cleanup
 """
 
 from __future__ import annotations
@@ -36,13 +27,22 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 
 import requests
-from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi import (
+    FastAPI,
+    File,
+    Form,
+    HTTPException,
+    Request,
+    UploadFile,
+    status,
+)
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from PIL import Image
 
-# imgshape internals
+# imgshape internals (assumed present in your PYTHONPATH)
 from imgshape.analyze import analyze_type
 from imgshape.compatibility import check_compatibility
 from imgshape.recommender import recommend_preprocessing, recommend_dataset
@@ -51,10 +51,17 @@ from imgshape.shape import get_shape
 # -------------------------
 # Configuration (env-driven)
 # -------------------------
-DATASET_ROOT = Path(os.environ.get("IMGSHAPE_DATASET_ROOT", "./datasets")).resolve()
-DATASET_CACHE = Path(os.environ.get("IMGSHAPE_DATASET_CACHE", "./.dataset_cache")).resolve()
-MAX_REMOTE_BYTES = int(os.environ.get("IMGSHAPE_MAX_REMOTE_BYTES", str(2 * 1024 * 1024 * 1024)))  # 2 GB default
+BASE_DIR = Path(__file__).resolve().parent
+DATASET_ROOT = Path(os.environ.get("IMGSHAPE_DATASET_ROOT", str(BASE_DIR / "datasets"))).resolve()
+DATASET_CACHE = Path(os.environ.get("IMGSHAPE_DATASET_CACHE", str(BASE_DIR / ".dataset_cache"))).resolve()
+MAX_REMOTE_BYTES = int(os.environ.get("IMGSHAPE_MAX_REMOTE_BYTES", str(2 * 1024 * 1024 * 1024)))  # 2GB default
 MAX_EXTRACT_FILES = int(os.environ.get("IMGSHAPE_MAX_EXTRACT_FILES", str(100_000)))
+CORS_ORIGINS_RAW = os.environ.get("IMGSHAPE_CORS_ORIGINS", '["*"]')
+try:
+    CORS_ORIGINS = json.loads(CORS_ORIGINS_RAW)
+except Exception:
+    CORS_ORIGINS = ["*"]
+
 try:
     _registry_raw = os.environ.get("IMGSHAPE_DATASET_REGISTRY", "{}")
     DATASET_REGISTRY = json.loads(_registry_raw)
@@ -73,14 +80,24 @@ if not logger.handlers:
     handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s"))
     logger.addHandler(handler)
 logger.setLevel(logging.INFO)
-
-# reduce streamlit noise if present
+logging.getLogger("urllib3").setLevel(logging.WARNING)
 logging.getLogger("streamlit").setLevel(logging.ERROR)
 
+# -------------------------
+# FastAPI app & middleware
+# -------------------------
 app = FastAPI(
     title="imgshape API",
     description="FastAPI wrapper for imgshape — analyze, recommend, and compatibility (archive-safe)",
-    version="2.2.0",
+    version="3.0.0",
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=CORS_ORIGINS,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # --------------------- serialization helpers ---------------------
@@ -88,7 +105,7 @@ app = FastAPI(
 
 def _to_serializable_scalar(x: Any) -> Any:
     try:
-        import numpy as np
+        import numpy as np  # type: ignore
     except Exception:
         np = None
 
@@ -105,14 +122,16 @@ def _to_serializable_scalar(x: Any) -> Any:
 
 
 def _to_serializable(obj: Any) -> Any:
+    # primitives
     if obj is None or isinstance(obj, (str, int, float, bool)):
         return obj
 
     try:
-        import numpy as np
+        import numpy as np  # type: ignore
     except Exception:
         np = None
 
+    # numpy arrays
     if np is not None and isinstance(obj, np.ndarray):
         try:
             return obj.tolist()
@@ -122,12 +141,14 @@ def _to_serializable(obj: Any) -> Any:
     if np is not None and isinstance(obj, (np.integer, np.floating, np.bool_, np.generic)):
         return _to_serializable_scalar(obj)
 
+    # bytes
     if isinstance(obj, (bytes, bytearray)):
         try:
             return base64.b64encode(obj).decode("ascii")
         except Exception:
             return str(obj)
 
+    # pillow image -> small preview
     if isinstance(obj, Image.Image):
         try:
             w, h = obj.size
@@ -138,6 +159,7 @@ def _to_serializable(obj: Any) -> Any:
         except Exception:
             return {"_pil_image": True, "info": str(obj)}
 
+    # mapping
     if isinstance(obj, dict):
         out = {}
         for k, v in obj.items():
@@ -172,19 +194,39 @@ def make_serializable_response(obj: Any) -> Any:
 
 
 # --------------------- optional UI mounting ---------------------
-tpl_dir = Path(__file__).resolve().parent / "templates"
-static_dir = Path(__file__).resolve().parent / "static"
+tpl_dir = BASE_DIR / "templates"
+static_dir = BASE_DIR / "static"
+
+templates: Optional[Jinja2Templates] = None
 if tpl_dir.exists() and static_dir.exists():
     templates = Jinja2Templates(directory=str(tpl_dir))
     app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 
     @app.get("/", response_class=HTMLResponse)
     def ui_index(request: Request):
-        return templates.TemplateResponse("index.html", {"request": request})
+        """
+        Render index.html and inject API endpoints & config for client-side convenience.
+        The HTML may reference {{ endpoints.analyze }} etc.
+        """
+        endpoints = {
+            "analyze": app.url_path_for("analyze_image"),
+            "recommend": app.url_path_for("recommend_image"),
+            "compatibility": app.url_path_for("check_dataset"),
+            "datasets": app.url_path_for("list_datasets"),
+            "health": app.url_path_for("health"),
+            "download_report": app.url_path_for("download_report"),
+        }
+        context = {
+            "request": request,
+            "endpoints": endpoints,
+            "version": app.version,
+            "dataset_registry": DATASET_REGISTRY,
+        }
+        return templates.TemplateResponse("index.html", context)
 else:
     @app.get("/", response_class=JSONResponse)
     def root():
-        return JSONResponse({"service": "imgshape", "version": "2.2.0"})
+        return JSONResponse({"service": "imgshape", "version": app.version})
 
 
 # --------------------- archive safety helpers ---------------------
@@ -287,7 +329,6 @@ def _download_remote_to_file(url: str, max_bytes: int = MAX_REMOTE_BYTES, timeou
                     out.write(chunk)
         return tmpf
     except HTTPException:
-        # remove partial file
         try:
             tmpf.unlink(missing_ok=True)
         except Exception:
@@ -306,6 +347,10 @@ def _download_remote_to_file(url: str, max_bytes: int = MAX_REMOTE_BYTES, timeou
 
 
 def ensure_local_dataset(dataset_name: str) -> Path:
+    """
+    If dataset exists locally under DATASET_ROOT, return path.
+    Otherwise attempt to download from DATASET_REGISTRY and safely extract into DATASET_ROOT/dataset_name.
+    """
     dataset_dir = (DATASET_ROOT / dataset_name).resolve()
     if dataset_dir.exists():
         return dataset_dir
@@ -314,10 +359,8 @@ def ensure_local_dataset(dataset_name: str) -> Path:
     if not url:
         raise HTTPException(status_code=404, detail=f"Dataset '{dataset_name}' not found locally and no registry URL configured.")
 
-    # download archive to temp file
     tmp_archive = _download_remote_to_file(url)
     try:
-        # create a temp extraction dir, extract safely, then move to final dataset_dir
         tmp_extract = Path(tempfile.mkdtemp(prefix="imgshape_extract_"))
         try:
             arch_type = _detect_archive_type_from_path(tmp_archive)
@@ -333,7 +376,6 @@ def ensure_local_dataset(dataset_name: str) -> Path:
                     _safe_extract_tar(tmp_archive, tmp_extract)
 
             dataset_dir.mkdir(parents=True, exist_ok=True)
-            # move children of tmp_extract into dataset_dir
             for child in tmp_extract.iterdir():
                 target = dataset_dir / child.name
                 if target.exists():
@@ -362,28 +404,79 @@ def ensure_local_dataset(dataset_name: str) -> Path:
 
 
 @app.post("/analyze", response_class=JSONResponse)
-async def analyze_image(file: UploadFile = File(...)):
+async def analyze_image(
+    file: Optional[UploadFile] = File(None), dataset_path: Optional[str] = Form(None)
+):
+    """
+    Accepts either an uploaded image file (preferred) or dataset_path pointing to a server-side image file.
+    Returns shape + lightweight analysis.
+    """
+    tmp_file_path: Optional[Path] = None
     try:
-        contents = await file.read()
-        img = Image.open(io.BytesIO(contents)).convert("RGB")
+        if file is not None:
+            contents = await file.read()
+            img = Image.open(io.BytesIO(contents)).convert("RGB")
+        elif dataset_path:
+            # Allow dataset_path relative to DATASET_ROOT for safety
+            candidate = Path(dataset_path)
+            if not candidate.is_absolute():
+                candidate = DATASET_ROOT / candidate
+            candidate = candidate.resolve()
+            if not candidate.exists():
+                raise HTTPException(status_code=404, detail=f"File not found: {dataset_path}")
+            # Only allow files under DATASET_ROOT or explicitly under allowed folder
+            if not _is_within_directory(DATASET_ROOT, candidate) and not str(candidate).startswith(str(DATASET_CACHE)):
+                logger.warning("analyze: dataset_path outside DATASET_ROOT: %s", candidate)
+                raise HTTPException(status_code=403, detail="Access to provided dataset_path is forbidden")
+            img = Image.open(str(candidate)).convert("RGB")
+        else:
+            raise HTTPException(status_code=400, detail="Provide an uploaded file or dataset_path")
         shape = get_shape(img)
         analysis = analyze_type(img) if analyze_type is not None else {"error": "analyze_unavailable"}
         payload = {"status": "ok", "shape": shape, "analysis": analysis}
         return JSONResponse(make_serializable_response(payload))
+    except HTTPException:
+        raise
     except Exception as e:
         logger.exception("analyze failed: %s", e)
         raise HTTPException(status_code=400, detail=str(e))
+    finally:
+        if tmp_file_path is not None and tmp_file_path.exists():
+            try:
+                tmp_file_path.unlink(missing_ok=True)
+            except Exception:
+                pass
 
 
 @app.post("/recommend", response_class=JSONResponse)
-async def recommend_image(file: UploadFile = File(...), prefs: Optional[str] = Form(None)):
+async def recommend_image(
+    file: Optional[UploadFile] = File(None), prefs: Optional[str] = Form(None), dataset_path: Optional[str] = Form(None)
+):
+    """
+    Returns preprocessing recommendations. Accepts uploaded image OR dataset_path to a server-side image.
+    """
     try:
-        contents = await file.read()
-        img = Image.open(io.BytesIO(contents)).convert("RGB")
+        if file is not None:
+            contents = await file.read()
+            img = Image.open(io.BytesIO(contents)).convert("RGB")
+        elif dataset_path:
+            candidate = Path(dataset_path)
+            if not candidate.is_absolute():
+                candidate = DATASET_ROOT / candidate
+            candidate = candidate.resolve()
+            if not candidate.exists():
+                raise HTTPException(status_code=404, detail=f"File not found: {dataset_path}")
+            if not _is_within_directory(DATASET_ROOT, candidate) and not str(candidate).startswith(str(DATASET_CACHE)):
+                raise HTTPException(status_code=403, detail="Access to provided dataset_path is forbidden")
+            img = Image.open(str(candidate)).convert("RGB")
+        else:
+            raise HTTPException(status_code=400, detail="Provide an uploaded file or dataset_path")
         user_prefs = [p.strip() for p in prefs.split(",") if p.strip()] if prefs else None
         rec = recommend_preprocessing(img, user_prefs=user_prefs) if recommend_preprocessing is not None else {"error": "recommender_unavailable"}
         payload = {"status": "ok", "recommendations": rec}
         return JSONResponse(make_serializable_response(payload))
+    except HTTPException:
+        raise
     except Exception as e:
         logger.exception("recommend failed: %s", e)
         raise HTTPException(status_code=400, detail=str(e))
@@ -406,10 +499,17 @@ async def check_dataset(
     dataset_path: Optional[str] = Form(None),
     dataset: Optional[UploadFile] = File(None),
 ):
+    """
+    Accepts:
+     - dataset upload (archive) via 'dataset' UploadFile
+     - dataset_name -> resolved via registry/ensure_local_dataset
+     - dataset_path -> server-side path (allowed only under DATASET_ROOT)
+    Returns compatibility report for given model.
+    """
     tempdir = None
+    tmp_archive = None
     try:
         if dataset is not None:
-            # uploaded archive: write to temp file then extract based on detected type
             contents = await dataset.read()
             tmp_archive = Path(tempfile.mkstemp(prefix="imgshape_upload_", suffix="")[1])
             with open(tmp_archive, "wb") as f:
@@ -422,7 +522,6 @@ async def check_dataset(
                 elif arch_type == "tar":
                     extracted_count = _safe_extract_tar(tmp_archive, tmp_extract)
                 else:
-                    # attempt both
                     try:
                         extracted_count = _safe_extract_zip(tmp_archive, tmp_extract)
                     except Exception:
@@ -432,14 +531,23 @@ async def check_dataset(
                 dataset_path_to_use = str(tmp_extract)
             finally:
                 try:
-                    tmp_archive.unlink(missing_ok=True)
+                    if tmp_archive.exists():
+                        tmp_archive.unlink(missing_ok=True)
                 except Exception:
                     pass
         elif dataset_name:
             dataset_dir = ensure_local_dataset(dataset_name)
             dataset_path_to_use = str(dataset_dir)
         elif dataset_path:
-            dataset_path_to_use = dataset_path
+            candidate = Path(dataset_path)
+            if not candidate.is_absolute():
+                candidate = DATASET_ROOT / candidate
+            candidate = candidate.resolve()
+            if not candidate.exists():
+                raise HTTPException(status_code=404, detail=f"Dataset not found: {dataset_path}")
+            if not _is_within_directory(DATASET_ROOT, candidate) and not str(candidate).startswith(str(DATASET_CACHE)):
+                raise HTTPException(status_code=403, detail="Access to provided dataset_path is forbidden")
+            dataset_path_to_use = str(candidate)
         else:
             raise HTTPException(status_code=400, detail="Provide dataset_name, dataset_path, or upload an archive under 'dataset'")
 
@@ -466,7 +574,7 @@ async def check_dataset(
 
 @app.get("/health", response_class=JSONResponse)
 def health():
-    return JSONResponse({"status": "healthy"})
+    return JSONResponse({"status": "healthy", "version": app.version})
 
 
 @app.post("/download_report", response_class=JSONResponse)
@@ -490,3 +598,12 @@ async def download_report(model: Optional[str] = Form(None), dataset_name: Optio
     except Exception as e:
         logger.exception("download_report failed: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# --------------------- startup logging ---------------------
+@app.on_event("startup")
+def _startup():
+    logger.info("Starting imgshape API v%s", app.version)
+    logger.info("DATASET_ROOT=%s DATASET_CACHE=%s", DATASET_ROOT, DATASET_CACHE)
+    logger.info("MAX_REMOTE_BYTES=%d MAX_EXTRACT_FILES=%d", MAX_REMOTE_BYTES, MAX_EXTRACT_FILES)
+    logger.info("CORS_ORIGINS=%s", CORS_ORIGINS)

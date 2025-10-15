@@ -3,108 +3,52 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>imgshape · Live (v2.2.0)</title>
-  <link rel="stylesheet" href="/static/style.css">
-  <meta name="theme-color" content="#0b0d10">
-  <!-- OpenGraph (helpful for previews) -->
-  <meta property="og:title" content="imgshape" />
-  <meta property="og:description" content="Dataset & image readiness analysis for AI/ML." />
+  <title>imgshape · Liquid Glass v3.0.0</title>
+
+  <!-- Theme -->
+  <meta name="theme-color" content="#0b0d10" />
+  <meta name="color-scheme" content="dark" />
+
+  <!-- OpenGraph -->
+  <meta property="og:title" content="imgshape — Dataset & Image Analysis" />
+  <meta property="og:description" content="Interactive visualization and readiness analysis for AI/ML datasets." />
   <meta property="og:image" content="/static/assets/imgshape_lg.png" />
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/png" href="/static/assets/imgshape_lg.png" />
+
+  <!-- CSS Dependencies -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/style.css" />
 </head>
+
 <body>
-  <nav class="topbar">
-    <div class="brand liquid-glass top-brand" role="banner" aria-label="imgshape brand">
-      <img id="brandLogo" class="brand-logo" src="assets\\sample_images\\imgshape_lg.png" alt="imgshape logo" />
+  <!-- Top Navigation Bar -->
+  <nav class="topbar liquid-glass">
+    <div class="brand" role="banner" aria-label="imgshape brand">
+      <img id="brandLogo" class="brand-logo" src="/static/assets/sample_images/imgshape_lg.png" alt="imgshape logo" />
       <div class="brand-text">
         <div class="app-name">imgshape</div>
-        <div class="version">v2.2.0</div>
+        <div class="version">v3.0.0 · Liquid Glass</div>
       </div>
     </div>
 
     <div class="nav-right">
       <input id="apiBase" class="api-base" placeholder="API base (defaults to /)" title="Set API base (optional)" />
-      <a id="help-link" class="btn-link" href="#" target="_blank">Docs</a>
+      <a id="help-link" class="btn-link" href="https://github.com/STiFLeR7/imgshape" target="_blank">Docs</a>
     </div>
   </nav>
 
-  <main class="container">
-    <aside class="sidebar card">
-      <div class="section">
-        <label class="label">Image (drag & drop or click)</label>
-        <div id="dropzone" class="dropzone">
-          <input id="fileInput" type="file" accept="image/*" />
-          <div class="drop-hint">Drop image here — JPG/PNG (max 10MB)</div>
-          <div id="previewSmall" class="preview-thumb" aria-hidden="true"></div>
-        </div>
-
-        <div class="form-row">
-          <label class="label">Or dataset path (server)</label>
-          <input id="pathInput" type="text" placeholder="/data/my_dataset" />
-        </div>
-
-        <div class="form-row">
-          <label class="label">Prefs (comma separated)</label>
-          <input id="prefsInput" type="text" placeholder="fast,small,quality" />
-        </div>
-
-        <div class="form-row">
-          <label class="label">Model (compatibility)</label>
-          <input id="modelInput" type="text" placeholder="mobilenet_v2 or ResNet50" />
-        </div>
-
-        <div class="row actions">
-          <button id="analyzeBtn" class="btn primary">Analyze</button>
-          <button id="recommendBtn" class="btn">Recommend</button>
-        </div>
-
-        <div class="row actions">
-          <button id="compatBtn" class="btn full">Check Compatibility</button>
-        </div>
-
-        <hr class="separator" />
-
-        <div class="muted small">Click <strong>Download JSON</strong> to save full results. Toggle API base to point to staging / prod.</div>
-
-        <div class="row">
-          <button id="downloadBtn" class="btn ghost">Download JSON</button>
-          <button id="copyBtn" class="btn ghost">Copy JSON</button>
-        </div>
-      </div>
-    </aside>
-
-    <section class="main">
-      <div class="toprow">
-        <div class="panel card preview-panel">
-          <div class="panel-head">Preview</div>
-          <div id="preview" class="preview-area glass-surface">
-            <img id="imgPreview" alt="preview" />
-            <div id="imgMeta" class="meta"></div>
-          </div>
-          <div id="progress" class="progress-bar" aria-hidden="true"><div class="progress-inner"></div></div>
-        </div>
-
-        <div class="panel card output-panel">
-          <div class="panel-head">JSON Output</div>
-          <div id="jsonToolbar" class="json-toolbar">
-            <button id="prettyBtn" class="tiny">Pretty</button>
-            <button id="rawBtn" class="tiny">Raw</button>
-            <div class="flex-spacer"></div>
-            <div id="statusBadge" class="badge muted">idle</div>
-          </div>
-          <pre id="jsonOutput" class="json" aria-live="polite"></pre>
-        </div>
-      </div>
-
-      <div class="bottom">
-        <div class="card logs">
-          <div class="panel-head">Logs</div>
-          <div id="logArea" class="log"></div>
-        </div>
-      </div>
-    </section>
+  <!-- Main Content -->
+  <main class="container-fluid mt-4">
+    <div id="root"></div> <!-- React app mounts here -->
   </main>
 
-  <!-- lightweight, modular logic -->
-  <script src="/static/app.js" type="module"></script>
+  <footer class="text-center py-4 text-muted small">
+    Made with ☕ and Liquid Glass · <span class="text-accent">imgshape</span> v3.0.0
+  </footer>
+
+  <!-- React + Motion Scripts -->
+  <script type="module" crossorigin src="/static/app.js"></script>
 </body>
 </html>
