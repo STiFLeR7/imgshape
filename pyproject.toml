@@ -1,14 +1,14 @@
 [build-system]
-requires = ["setuptools>=61.0", "wheel"]
+requires = ["setuptools>=61.0", "wheel", "build"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "imgshape"
-version = "2.2.0"
-description = "imgshape — robust image shape detection, dataset analysis, preprocessing & augmentation recommendations, visualization, compatibility reports, and PyTorch loader helpers"
+version = "3.0.0"
+description = "imgshape — robust dataset intelligence: analyze, recommend, visualize, and export augmentation & preprocessing pipelines."
 readme = "README.md"
 authors = [
-  { name="Stifler", email="stiflerxd.ai@cudabit.live" }
+  { name = "Stifler", email = "stiflerxd.ai@cudabit.live" }
 ]
 license = { text = "MIT" }
 requires-python = ">=3.8"
@@ -19,7 +19,7 @@ dependencies = [
   "numpy>=1.21.0",
   "matplotlib>=3.4.0",
   "scikit-image>=0.19.0",
-  "gradio>=3.50.0"
+  "streamlit>=1.33.0"
 ]
 
 [project.optional-dependencies]
@@ -28,17 +28,39 @@ torch = [
   "torchvision>=0.13.0",
 ]
 pdf = [
-  "weasyprint>=53.0"
+  "weasyprint>=53.0",
+  "reportlab>=3.6.0",
+  "pyyaml>=6.0",
 ]
 viz = [
-  "seaborn>=0.11.0"
+  "plotly>=5.20.0",
+  "seaborn>=0.12.0",
+]
+ui = [
+  "streamlit>=1.33.0",
+  "pyyaml>=6.0",
+]
+plugins = [
+  "importlib-metadata>=6.0",
 ]
 dev = [
   "pytest>=7.0",
   "black>=23.0",
   "flake8>=3.9",
   "pre-commit>=2.20",
-  "mypy>=1.0"
+  "mypy>=1.0",
+  "build>=1.2",
+  "twine>=4.0",
+]
+full = [
+  "torch>=1.12.0",
+  "torchvision>=0.13.0",
+  "weasyprint>=53.0",
+  "reportlab>=3.6.0",
+  "pyyaml>=6.0",
+  "plotly>=5.20.0",
+  "seaborn>=0.12.0",
+  "streamlit>=1.33.0",
 ]
 
 [project.urls]
@@ -51,10 +73,16 @@ Documentation = "https://stifler7.github.io/imgshape/"
 imgshape = "imgshape.cli:main"
 
 [tool.setuptools]
-package-dir = {"" = "src"}
+package-dir = { "" = "src" }
+include-package-data = true
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+# If you have package data (profiles, plugins, assets) ensure they are included
+# either via MANIFEST.in or package_data. Example package-data config:
+[tool.setuptools.package-data]
+"imgshape" = ["profiles/*.yaml", "plugins/*.py", "assets/**"]
 
 [metadata]
 classifiers = [
@@ -64,6 +92,7 @@ classifiers = [
   "Topic :: Scientific/Engineering :: Image Recognition",
   "Intended Audience :: Science/Research",
   "Intended Audience :: Developers",
-  "Development Status :: 4 - Beta"
+  "Framework :: Streamlit",
+  "Development Status :: 5 - Production/Stable"
 ]
 keywords = ["images", "dataset", "visualization", "augmentation", "pytorch", "machine-learning", "edge-ai"]
