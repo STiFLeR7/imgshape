@@ -2,9 +2,13 @@ name: imgshape CI
 
 on:
   push:
-    branches: [ "master", "main" ]
+    branches: ["master", "main"]
   pull_request:
-    branches: [ "master", "main" ]
+    branches: ["master", "main"]
+
+concurrency:
+  group: imgshape-ci-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -15,35 +19,41 @@ jobs:
     strategy:
       matrix:
         python-version: [3.10, 3.11]
+      fail-fast: false
+
+    env:
+      PIP_EXTRA_INDEX_URL: ""
+      PYTHONUNBUFFERED: 1
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      - name: Set up Python ${{ matrix.python-version }}
+      - name: Setup Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
         with:
           python-version: "${{ matrix.python-version }}"
+          cache: "pip"
 
-      - name: Cache pip
+      - name: Cache pip cache (explicit)
         uses: actions/cache@v4
         with:
           path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('**/pyproject.toml','**/setup.py','**/requirements.txt') }}
+          key: ${{ runner.os }}-pip-${{ matrix.python-version }}-${{ hashFiles('**/pyproject.toml','**/setup.py','**/requirements.txt') }}
           restore-keys: |
-            ${{ runner.os }}-pip-
+            ${{ runner.os }}-pip-${{ matrix.python-version }}-
 
       - name: Install system deps (robust apt-get)
         shell: bash
         run: |
           set -euo pipefail
           export DEBIAN_FRONTEND=noninteractive
-          # apt options: increase http timeout & enable retries at apt level
           APT_OPTS="-o Acquire::Retries=3 -o Acquire::http::Timeout=60 -o Acquire::https::Timeout=60"
 
           echo "Updating apt indexes (retries=3)..."
-          attempt=0
-          max=3
+          attempt=0; max=3
           until [ $attempt -ge $max ]
           do
             attempt=$((attempt+1))
@@ -59,32 +69,37 @@ jobs:
           echo "Installing minimal runtime libs (no recommends) ..."
           sudo apt-get install -y --no-install-recommends libgl1-mesa-glx libglib2.0-0 ca-certificates || {
             echo "apt-get install failed — printing apt logs for debugging" >&2
-            # show some apt debug info
             apt-cache policy libgl1-mesa-glx || true
             exit 1
           }
-
           echo "apt-get step completed"
+
+      - name: Upgrade pip / build tools
+        shell: bash
+        run: |
+          python -m pip install --upgrade pip wheel setuptools build
 
       - name: Install package in editable mode with extras (dev + full)
         shell: bash
         run: |
-          python -m pip install --upgrade pip wheel setuptools build
-          # install editable with extras (dev + full). If full fails due to environment, try a lighter set.
           pip install -e ".[dev,full]" || pip install -e ".[dev]"
 
       - name: Prepare test image
         shell: bash
         run: |
-          mkdir -p sample
+          set -euo pipefail
+          mkdir -p sample tmp
           if [ -f assets/sample_images/Image_created_with_a_mobile_phone.png ]; then
             cp assets/sample_images/Image_created_with_a_mobile_phone.png sample/test.png
           else
-            curl -fsSLo sample/test.png https://raw.githubusercontent.com/STiFLeR7/imgshape/master/assets/sample_images/Image_created_with_a_mobile_phone.png || true
+            RAW="https://raw.githubusercontent.com/STiFLeR7/imgshape/master/assets/sample_images/Image_created_with_a_mobile_phone.png"
+            curl -fsSLo sample/test.png "$RAW" || true
             if [ ! -f sample/test.png ]; then
+              echo "Primary sample image not available; using Wikimedia fallback"
               curl -fsSLo sample/test.png https://upload.wikimedia.org/wikipedia/commons/7/77/Delete_key1.jpg || true
             fi
           fi
+          ls -l sample || true
 
       - name: Lint (flake8) — non-blocking
         shell: bash
@@ -102,7 +117,7 @@ jobs:
       - name: CLI Test - Help
         run: imgshape --help
 
-      - name: CLI Test - Version
+      - name: CLI Test - Version (non-blocking)
         run: imgshape --version || true
 
       - name: CLI Test - Shape detection
@@ -114,47 +129,23 @@ jobs:
       - name: CLI Test - Recommendation
         run: python -m imgshape.cli --path sample/test.png --recommend --augment
 
-      - name: CLI Test - Report (Markdown)
+      - name: CLI Test - Report (Markdown) (non-blocking)
         run: python -m imgshape.cli --path sample --report --augment --out tmp/ci_report.md || true
 
-      - name: CLI Test - Report (HTML)
+      - name: CLI Test - Report (HTML) (non-blocking)
         run: python -m imgshape.cli --path sample --report --augment --out tmp/ci_report.html || true
 
-      - name: CLI Test - Visualization (non-blocking) — robust script
+      - name: CLI Test - Visualization (non-blocking) — run script
         shell: bash
         run: |
-          echo "Writing small helper script to /tmp/plot_test.py and running it..."
-          SCRIPT_PATH="/tmp/plot_test.py"
-          cat > "$SCRIPT_PATH" <<'PY'
-#!/usr/bin/env python3
-import sys
-from pathlib import Path
-try:
-    from imgshape.viz import plot_shape_distribution
-except Exception as e:
-    print("Could not import imgshape.viz:", e, file=sys.stderr)
-    sys.exit(0)
-
-try:
-    out = plot_shape_distribution("sample", save=False)
-    print("plot result type:", type(out))
-    # If plot returns a plotly figure, try writing an HTML to ensure path-writing works
-    try:
-        if hasattr(out, "write_html"):
-            Path("tmp").mkdir(parents=True, exist_ok=True)
-            out.write_html("tmp/ci_shape_plot.html")
-            print("Wrote tmp/ci_shape_plot.html")
-    except Exception as ex:
-        print("Could not write interactive plot (allowed):", ex, file=sys.stderr)
-except Exception as e:
-    print("plot_shape_distribution failed (allowed):", e, file=sys.stderr)
-PY
-          python "$SCRIPT_PATH" || true
+          # run deterministic script that attempts to generate an interactive plot (if viz available)
+          mkdir -p .github/scripts
+          python .github/scripts/plot_test.py || true
 
       - name: CLI Test - Model Compatibility (non-blocking)
         run: python -m imgshape.cli --dir sample --check mobilenet_v2 || true
 
-      - name: CLI Test - TorchLoader (transform snippet)
+      - name: CLI Test - TorchLoader (transform snippet) (non-blocking)
         run: python -m imgshape.cli --path sample --torchloader --out tmp/transform_snippet.py || true
 
       - name: Run pytest
@@ -168,6 +159,15 @@ PY
           pip install twine
           twine check dist/*
 
+      - name: Collect logs & reports (always)
+        if: always()
+        run: |
+          mkdir -p tmp
+          if [ ! -f pytest-report.xml ]; then
+            echo "<testsuites/>" > pytest-report.xml
+          fi
+          ls -la tmp || true
+
       - name: Upload artifacts (test logs + distributions)
         if: always()
         uses: actions/upload-artifact@v4
@@ -177,6 +177,14 @@ PY
             dist/**
             build/**
             tmp/**
-            imgshape_report.* 
+            imgshape_report.*
             pytest-report.xml
+            tmp/ci_report.*
+            tmp/ci_shape_plot.html
+            tmp/transform_snippet.py
 
+      - name: Cleanup (best-effort)
+        if: always()
+        run: |
+          rm -rf .pytest_cache || true
+          du -sh tmp || true
