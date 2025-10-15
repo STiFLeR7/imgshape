@@ -1,15 +1,11 @@
 # service/app.py
 """
-FastAPI wrapper for imgshape v3.0.0 — robust archive support + UI integration
+FastAPI wrapper for imgshape v3.1.0 — robust archive support + UI integration
 
-Improvements over previous version:
-- CORS middleware (configurable via IMGSHAPE_CORS_ORIGINS)
-- UI template now receives endpoint URLs (analyze/recommend/compatibility/etc.)
-- /analyze and /recommend accept either an uploaded file OR a server-side dataset_path
-  (file takes precedence). This enables the static UI to call endpoints without special JS wiring.
-- Improved streaming/error handling and logging
-- Startup log that prints effective config
-- Small safety hardening: resolved path checks, deterministic temp cleanup
+Notes:
+ - Injects runtime endpoints into the index template as `window.IMGSHAPE` (via Jinja).
+ - Keeps archive extraction safety, remote download limits, and temp cleanup.
+ - Adds debug endpoints to inspect static files served by FastAPI.
 """
 
 from __future__ import annotations
@@ -24,7 +20,7 @@ import tempfile
 import zipfile
 import tarfile
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Tuple
 
 import requests
 from fastapi import (
@@ -48,6 +44,8 @@ from imgshape.compatibility import check_compatibility
 from imgshape.recommender import recommend_preprocessing, recommend_dataset
 from imgshape.shape import get_shape
 
+__version__ = "3.1.0"
+
 # -------------------------
 # Configuration (env-driven)
 # -------------------------
@@ -64,10 +62,11 @@ except Exception:
 
 try:
     _registry_raw = os.environ.get("IMGSHAPE_DATASET_REGISTRY", "{}")
-    DATASET_REGISTRY = json.loads(_registry_raw)
+    DATASET_REGISTRY: Dict[str, str] = json.loads(_registry_raw)
 except Exception:
     DATASET_REGISTRY = {}
 
+# ensure roots exist
 DATASET_ROOT.mkdir(parents=True, exist_ok=True)
 DATASET_CACHE.mkdir(parents=True, exist_ok=True)
 
@@ -89,7 +88,7 @@ logging.getLogger("streamlit").setLevel(logging.ERROR)
 app = FastAPI(
     title="imgshape API",
     description="FastAPI wrapper for imgshape — analyze, recommend, and compatibility (archive-safe)",
-    version="3.0.0",
+    version=__version__,
 )
 
 app.add_middleware(
@@ -206,7 +205,7 @@ if tpl_dir.exists() and static_dir.exists():
     def ui_index(request: Request):
         """
         Render index.html and inject API endpoints & config for client-side convenience.
-        The HTML may reference {{ endpoints.analyze }} etc.
+        The HTML may reference window.IMGSHAPE (injected into the template).
         """
         endpoints = {
             "analyze": app.url_path_for("analyze_image"),
@@ -300,7 +299,6 @@ def _detect_archive_type_from_path(path: Path) -> str:
             return "zip"
     except Exception:
         pass
-    # try tar
     try:
         with tarfile.open(str(path)):
             return "tar"
@@ -347,10 +345,6 @@ def _download_remote_to_file(url: str, max_bytes: int = MAX_REMOTE_BYTES, timeou
 
 
 def ensure_local_dataset(dataset_name: str) -> Path:
-    """
-    If dataset exists locally under DATASET_ROOT, return path.
-    Otherwise attempt to download from DATASET_REGISTRY and safely extract into DATASET_ROOT/dataset_name.
-    """
     dataset_dir = (DATASET_ROOT / dataset_name).resolve()
     if dataset_dir.exists():
         return dataset_dir
@@ -407,24 +401,18 @@ def ensure_local_dataset(dataset_name: str) -> Path:
 async def analyze_image(
     file: Optional[UploadFile] = File(None), dataset_path: Optional[str] = Form(None)
 ):
-    """
-    Accepts either an uploaded image file (preferred) or dataset_path pointing to a server-side image file.
-    Returns shape + lightweight analysis.
-    """
     tmp_file_path: Optional[Path] = None
     try:
         if file is not None:
             contents = await file.read()
             img = Image.open(io.BytesIO(contents)).convert("RGB")
         elif dataset_path:
-            # Allow dataset_path relative to DATASET_ROOT for safety
             candidate = Path(dataset_path)
             if not candidate.is_absolute():
                 candidate = DATASET_ROOT / candidate
             candidate = candidate.resolve()
             if not candidate.exists():
                 raise HTTPException(status_code=404, detail=f"File not found: {dataset_path}")
-            # Only allow files under DATASET_ROOT or explicitly under allowed folder
             if not _is_within_directory(DATASET_ROOT, candidate) and not str(candidate).startswith(str(DATASET_CACHE)):
                 logger.warning("analyze: dataset_path outside DATASET_ROOT: %s", candidate)
                 raise HTTPException(status_code=403, detail="Access to provided dataset_path is forbidden")
@@ -452,9 +440,6 @@ async def analyze_image(
 async def recommend_image(
     file: Optional[UploadFile] = File(None), prefs: Optional[str] = Form(None), dataset_path: Optional[str] = Form(None)
 ):
-    """
-    Returns preprocessing recommendations. Accepts uploaded image OR dataset_path to a server-side image.
-    """
     try:
         if file is not None:
             contents = await file.read()
@@ -499,13 +484,6 @@ async def check_dataset(
     dataset_path: Optional[str] = Form(None),
     dataset: Optional[UploadFile] = File(None),
 ):
-    """
-    Accepts:
-     - dataset upload (archive) via 'dataset' UploadFile
-     - dataset_name -> resolved via registry/ensure_local_dataset
-     - dataset_path -> server-side path (allowed only under DATASET_ROOT)
-    Returns compatibility report for given model.
-    """
     tempdir = None
     tmp_archive = None
     try:
@@ -600,10 +578,24 @@ async def download_report(model: Optional[str] = Form(None), dataset_name: Optio
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# --------------------- debug routes ---------------------
+@app.get("/_debug_static_list", response_class=JSONResponse)
+def _debug_static_list():
+    s = Path(__file__).resolve().parent / "static"
+    if not s.exists():
+        return JSONResponse({"static_exists": False, "static_dir": str(s)})
+    files = []
+    for p in sorted(s.rglob("*")):
+        if p.is_file():
+            files.append(str(p.relative_to(s)))
+    return JSONResponse({"static_exists": True, "static_dir": str(s), "files": files})
+
+
 # --------------------- startup logging ---------------------
 @app.on_event("startup")
 def _startup():
     logger.info("Starting imgshape API v%s", app.version)
+    logger.info("BASE_DIR=%s", BASE_DIR)
     logger.info("DATASET_ROOT=%s DATASET_CACHE=%s", DATASET_ROOT, DATASET_CACHE)
     logger.info("MAX_REMOTE_BYTES=%d MAX_EXTRACT_FILES=%d", MAX_REMOTE_BYTES, MAX_EXTRACT_FILES)
     logger.info("CORS_ORIGINS=%s", CORS_ORIGINS)
