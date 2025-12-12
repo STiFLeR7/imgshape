@@ -1,255 +1,196 @@
-﻿# 🖼️ imgshape — Smart Dataset Intelligence Toolkit (v3.0.0 • Aurora)
+﻿<div align="center">
 
-`imgshape` is a modular Python toolkit for **image analysis**, **dataset inspection**, **augmentation & preprocessing recommendations**, **visualization**, and **pipeline export** — now evolved into a **Streamlit-powered dataset assistant** for modern ML/DL workflows.
+# 🖼️ imgshape
+### The Data-Centric AI Toolkit for Vision Engineers
 
-![imgshape demo](assets/sample_images/imgshape.png)  
-[![PyPI Downloads](https://static.pepy.tech/personalized-badge/imgshape?period=total&units=international_system&left_color=black&right_color=green&left_text=downloads)](https://pepy.tech/projects/imgshape)
+[![PyPI Version](https://img.shields.io/pypi/v/imgshape?color=blue&style=for-the-badge)](https://pypi.org/project/imgshape/)
+[![Python Version](https://img.shields.io/pypi/pyversions/imgshape?style=for-the-badge&color=yellow)](https://pypi.org/project/imgshape/)
+[![Downloads](https://img.shields.io/pepy/dt/imgshape?style=for-the-badge&color=green)](https://pepy.tech/project/imgshape)
+[![License](https://img.shields.io/github/license/STiFLeR7/imgshape?style=for-the-badge&color=orange)](https://github.com/STiFLeR7/imgshape/blob/main/LICENSE)
+[![Streamlit](https://img.shields.io/badge/Streamlit-FF4B4B?style=for-the-badge&logo=Streamlit&logoColor=white)](https://streamlit.io)
+[![Code Style](https://img.shields.io/badge/code%20style-black-000000.svg?style=for-the-badge)](https://github.com/psf/black)
 
----
+<br/>
 
-## ✨ What's New in v3.0.0 — *Aurora Major Release*
+![imgshape demo](assets/sample_images/imgshape.png)
 
-> A complete redesign: from a static CLI toolkit → to an intelligent dataset analysis framework.
+<br/>
 
-**🧭 Highlights**
-- **Full Streamlit App (`app.py`)** with 6 powerful tabs:
-  - 📐 **Shape** → instant image shape detection  
-  - 🔍 **Analyze** → entropy, color channels, dataset insights  
-  - 🧠 **Recommend** → preprocessing & augmentation planning  
-  - 🎨 **Augment Visualizer** → real-time augmentation previews  
-  - 📄 **Reports** → export Markdown / HTML dataset reports  
-  - 🔗 **Pipeline Export** → generate ready-to-run code snippets
+**Transform raw images into actionable intelligence.**<br/>
+*Auditing • Profiling • Recommendation • Pipeline Export*
 
-**🧩 Modular Architecture**
-- New `RecommendationPipeline` system for building, saving, and exporting end-to-end pipelines.
-- Plugin framework (`/src/imgshape/plugins`) with support for:
-  - `AnalyzerPlugin`
-  - `RecommenderPlugin`
-  - `ExporterPlugin`
-- Unified lazy import system for ultra-fast startup.
+[**Explore Docs**](https://stifler7.github.io/imgshape/) • [**Report Bug**](https://github.com/STiFLeR7/imgshape/issues) • [**Request Feature**](https://github.com/STiFLeR7/imgshape/issues)
 
-**💡 Smart Recommendations**
-- `RecommendEngine` provides preprocessing & augmentation strategies based on:
-  - Entropy, resolution, and dataset diversity
-  - User preferences (e.g. `preserve_aspect`, `low_res`)
-  - Optional YAML profiles (`/profiles/`)
-
-**📊 Dataset Analyzer Improvements**
-- Counts only *unique readable images* (no overcount)
-- Aggregates shapes, channels, entropy, and unreadable stats
-- Sample summaries for representative examples
-
-**📁 Reports**
-- Markdown, HTML, and PDF (optional via `weasyprint` + `reportlab`)
-- Embedded metadata, augmentations, and preprocessing recommendations
-
-**🧰 CLI Modernization**
-- `imgshape --web` → directly launches Streamlit UI  
-- Extended with new actions:
-  - `--pipeline-export`, `--pipeline-apply`, `--snapshot-save`, `--snapshot-diff`
-- Plugin controls: `--plugin-list`, `--plugin-add`, `--plugin-remove`
+</div>
 
 ---
 
-## ⚙️ Installation
+## ⚡ What is imgshape?
+
+**imgshape (v3.0.0 Aurora)** is a modular intelligence engine designed for modern **Computer Vision** workflows. It bridges the gap between raw data collection and model training by providing:
+
+1.  **Deep Dataset Auditing**: Scan gigabytes of image data for corruption, channel inconsistency, and entropy distribution.
+2.  **Smart Recommendations**: Uses statistical analysis to suggest optimal preprocessing steps (resize, normalization, augmentation).
+3.  **Pipeline Export**: Instantly generate production-ready code for **PyTorch**, **Albumentations**, or **TensorFlow**.
+4.  **Visual Dashboard**: A fully integrated **Streamlit** GUI for real-time augmentation testing and dataset exploration.
+
+> *"Models are only as good as the data they see. imgshape ensures your models see clarity."*
+
+---
+
+## 🏗️ Architecture
+
+imgshape is built on a **plugin-first architecture**, allowing seamless extension of analyzers, recommenders, and exporters.
+
+```mermaid
+graph TD
+    A[CLI / API / Streamlit] --> B{Core Engine}
+    B --> C[File IO & Lazy Loading]
+    B --> D[Analysis Module]
+    B --> E[Recommendation Engine]
+    
+    D --> F[Entropy & Stats]
+    D --> G[Shape & Channels]
+    
+    E --> H[Pipeline Generator]
+    H --> I[PyTorch Snippets]
+    H --> J[JSON/YAML Configs]
+    H --> K[HTML/PDF Reports]
+```
+
+---
+
+## � Key Features
+
+| Feature | Description |
+| :--- | :--- |
+| **🔍 Intelligent Audit** | Smart traversal of datasets to identify non-readable files, outliers, and distribution shifts. |
+| **🧠 Recommendation Engine** | Automatically suggests `Resize`, `Normalize`, and `Augment` parameters based on *actual* data statistics. |
+| **🎨 Interactive Visualizer** | Test augmentation chains in real-time using the built-in **Streamlit** dashboard. |
+| **📄 Automated Reporting** | Generate executive-level **HTML/PDF reports** with histograms, sample previews, and health scores. |
+| **🔌 Plugin System** | Extend capabilities with custom plugins for domain-specific pre-processing (Medical, Satellite, etc.). |
+| **🛠️ Edge Ready** | Export optimized pipelines for deployment constraints. |
+
+---
+
+## 📦 Installation
+
+Install the core package via PyPI:
 
 ```bash
 pip install imgshape
-````
-
-> Requires **Python 3.8+**
-> Core dependencies: `Pillow`, `numpy`, `matplotlib`, `scikit-image`, `streamlit`
-
-**Optional extras:**
-
-| Extra             | Description                           |
-| :---------------- | :------------------------------------ |
-| `imgshape[torch]` | PyTorch / torchvision support         |
-| `imgshape[pdf]`   | PDF report generation via WeasyPrint  |
-| `imgshape[viz]`   | Advanced plots with Seaborn & Plotly  |
-| `imgshape[ui]`    | Streamlit UI + profile parsing        |
-| `imgshape[full]`  | Full suite with all optional features |
-
----
-
-## 💻 CLI Usage
-
-```bash
-# Shape detection
-imgshape --path ./sample.jpg --shape
-
-# Single image analysis
-imgshape --path ./sample.jpg --analyze
-
-# Preprocessing + augmentations
-imgshape --path ./sample.jpg --recommend --augment
-
-# Dataset compatibility check
-imgshape --dir ./images --check mobilenet_v2
-
-# Dataset visualization
-imgshape --viz ./images
-
-# Dataset report (md + html)
-imgshape --path ./images --report --augment --report-format md,html --out report
-
-# Torch integration (transform/DataLoader)
-imgshape --path ./images --torchloader --augment --out transform_snippet.py
-
-# Launch the Streamlit web UI
-imgshape --web
 ```
 
----
-
-## 🖥️ Streamlit Interface (v3)
-
-> Run the visual interface directly:
+### 💎 Power User Installation
+For the full experience (including **PyTorch** integration, **PDF** reports, and **Advanced Viz**):
 
 ```bash
+pip install "imgshape[full]"
+```
+
+*Other options: `[torch]`, `[ui]`, `[pdf]`, `[viz]`*
+
+---
+
+## 💻 Usage
+
+### 1. The Command Line Interface (CLI)
+Designed for CI/CD pipelines and quick checks.
+
+```bash
+# 🧠 Analyze a single image and get recommendations
+imgshape --path dataset/train/001.jpg --analyze --recommend
+
+# 📊 Generate a full dataset health report
+imgshape --path ./datasets/cats_vs_dogs --report --report-format md,html
+
+# 🛠️ Export a PyTorch transform pipeline based on dataset stats
+imgshape --path ./datasets/cats_vs_dogs --torchloader --out transforms.py
+```
+
+### 2. The Visual Dashboard (Streamlit)
+Launch the interactive studio:
+
+```bash
+imgshape --web
+# OR
 streamlit run app.py
 ```
 
-### Tabs Overview
-
-| Tab                   | Function                                           |
-| --------------------- | -------------------------------------------------- |
-| 📐 Shape              | Detects image dimensions & color channels          |
-| 🔍 Analyze            | Dataset entropy, shapes, and channel distributions |
-| 🧠 Recommend          | Suggests preprocessing & augmentations             |
-| 🎨 Augment Visualizer | Interactive augmentation intensity slider          |
-| 📄 Reports            | Generates Markdown & HTML dataset summaries        |
-| 🔗 Pipeline Export    | Exports pipelines as code (PyTorch/YAML/JSON)      |
-
 ---
 
-## 🧠 Python API Example
+## 🧑‍💻 Python API
+
+Seamlessly integrate intelligence into your training scripts.
 
 ```python
-from imgshape.shape import get_shape
-from imgshape.analyze import analyze_type
-from imgshape.recommender import recommend_preprocessing
 from imgshape.pipeline import RecommendationPipeline
+from imgshape.recommender import recommend_preprocessing
 
-print(get_shape("sample.jpg"))
-print(analyze_type("sample.jpg"))
-print(recommend_preprocessing("sample.jpg"))
+target_image = "assets/sample.jpg"
 
-# Build a pipeline from a recommendation
-rec = recommend_preprocessing("sample.jpg")
+# 1. Get AI-driven recommendations
+rec = recommend_preprocessing(target_image)
+
+# 2. Build a deployable pipeline
 pipeline = RecommendationPipeline.from_recommender_output(rec)
+
+# 3. Export to dictionary or code
+print(f"Recommended Pipeline Status: {pipeline.status}")
 print(pipeline.as_dict())
 ```
 
 ---
 
-## 🧩 Plugins
+## 🧩 Plugins & Extension
 
-Extend `imgshape` with your own plugins:
+Create custom logic for your specific domain requirements.
 
+```columns
+<div align="center">
+
+**Create Plugin**
 ```python
-# src/imgshape/plugins/custom_brightness.py
+# src/imgshape/plugins/my_plugin.py
 from imgshape.plugins import RecommenderPlugin
 
-class CustomBrightnessPlugin(RecommenderPlugin):
-    NAME = "CustomBrightness"
-
+class HDRPlugin(RecommenderPlugin):
+    NAME = "HDR_Enhance"
     def recommend(self, analysis):
-        return [{"name": "adjust_brightness", "spec": {"factor": 1.2}}]
+        # Implementation
+        return [{"op": "tone_map"}]
 ```
 
-Then register it via CLI:
+</div>
 
+<div align="center">
+
+**Register Plugin**
 ```bash
-imgshape --plugin-add ./src/imgshape/plugins/custom_brightness.py
+imgshape --plugin-add ./my_plugin.py
+```
+
+</div>
 ```
 
 ---
 
-## 📝 Reports (Markdown, HTML, PDF)
+## 🤝 Contributing
 
-```bash
-# Markdown & HTML reports
-imgshape --report --path ./datasets/cats --report-format md,html
+We welcome contributions from the community! Please read our [Contributing Guide](CONTRIBUTING.md) for details on our code of conduct and the process for submitting pull requests.
 
-# Generate PDF (requires extras)
-pip install imgshape[pdf]
-imgshape --report --path ./datasets/dogs --report-format pdf
-```
-
----
-
-## 🧪 Testing
-
-Run all tests locally:
-
-```bash
-pytest -q
-```
-
-Or install dev tools:
-
-```bash
-pip install imgshape[dev]
-black --check src tests
-flake8 src tests
-```
+1.  Fork the repo
+2.  Create your feature branch (`git checkout -b feature/amazing-feature`)
+3.  Commit your changes (`git commit -m 'Add amazing feature'`)
+4.  Push to the branch (`git push origin feature/amazing-feature`)
+5.  Open a Pull Request
 
 ---
 
-## 🧱 Developer & Build Guide
+<div align="center">
 
-```bash
-# Clean build artifacts
-rm -rf dist build *.egg-info
+**Built with 💜 by [Stifler](https://github.com/STiFLeR7)**
 
-# Build
-python -m build
+*Star this repo if you find it useful!* ⭐
 
-# Check metadata
-twine check dist/*
-
-# Upload (TestPyPI)
-twine upload --repository testpypi dist/*
-
-# Install locally
-pip install dist/imgshape-3.0.0-py3-none-any.whl
-```
-
----
-
-## 🔗 Resources
-
-* **Documentation:** [https://stifler7.github.io/imgshape](https://stifler7.github.io/imgshape)
-* **GitHub Repository:** [https://github.com/STiFLeR7/imgshape](https://github.com/STiFLeR7/imgshape)
-* **Issues:** [https://github.com/STiFLeR7/imgshape/issues](https://github.com/STiFLeR7/imgshape/issues)
-* **License:** MIT
-
----
-
-## 💫 Credits
-
-Developed with ❤️ by **[Stifler](https://github.com/STiFLeR7)**
-Researched / Developer
-*Empowering AI at the Edge.*
-
----
-
-## 🧭 Roadmap (v3.1.x)
-
-* ONNX / TensorRT export for edge inference
-* Auto-EDA visualization (class imbalance, histograms)
-* Enhanced Streamlit dashboard with live metrics
-* HuggingFace Spaces demo & CI/CD workflow
-
-```
-
----
-
-### 🧩 Summary of Key Updates
-- Updated version → `v3.0.0 (Aurora)`  
-- Removed Gradio references (Streamlit is now primary)  
-- Added new **Pipeline**, **Plugins**, and **Recommender Engine** details  
-- Expanded CLI + Streamlit examples  
-- Ready for **PyPI rendering** and **GitHub preview**
-
+</div>
