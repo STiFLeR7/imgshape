@@ -1,14 +1,8 @@
 {
-  "name": "imgshape-ui",
-  "version": 2,
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "framework": "vite",
-  "nodeVersion": "18.x",
   "env": {
-    "VITE_API_BASE_URL": {
-      "default": "https://imgshape-947614788790.asia-south1.run.app",
-      "description": "Backend API base URL"
-    }
+    "VITE_API_BASE_URL": "https://imgshape-947614788790.asia-south1.run.app"
   }
 }
