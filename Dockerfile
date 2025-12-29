@@ -39,19 +39,24 @@ RUN rm -rf /app/ui /app/service/templates /app/service/static || true
 # Upgrade pip and install build tools
 RUN python -m pip install --upgrade pip setuptools wheel
 
-# Install Python dependencies
-RUN if [ -f requirements.txt ]; then \
-    pip install --no-cache-dir -r requirements.txt; \
+# Install Python dependencies with verification
+RUN pip install --no-cache-dir uvicorn[standard] && \
+    if [ -f requirements.txt ]; then \
+        pip install --no-cache-dir -r requirements.txt; \
     fi && \
-    pip install --no-cache-dir --upgrade . && \
-    pip install --no-cache-dir uvicorn[standard]
+    pip install --no-cache-dir -e . && \
+    python -c "import service.app; print('✓ service.app imports successfully')" && \
+    python -c "import uvicorn; print('✓ uvicorn available')"
 
 # Expose port for Cloud Run (uses $PORT)
 EXPOSE 8080
 
-# Run FastAPI with proper PORT env var expansion (shell form, not JSON array)
-CMD echo "Starting uvicorn on 0.0.0.0:${PORT:-8080}" && \
-    exec uvicorn service.app:app \
+# Run FastAPI with diagnostic output
+CMD set -x && \
+    echo "PORT=${PORT:-8080}" && \
+    echo "PYTHONPATH=${PYTHONPATH}" && \
+    python -c "import sys; print('Python:', sys.version); import service.app" && \
+    exec python -m uvicorn service.app:app \
     --host 0.0.0.0 \
     --port ${PORT:-8080} \
     --timeout-keep-alive 120 \
