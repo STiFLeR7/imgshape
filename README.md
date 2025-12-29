@@ -14,7 +14,7 @@
 
 <br/>
 
-![imgshape Atlas](ui/public/imgshape.png)
+![imgshape Atlas](service/imgshape.png)
 
 <br/>
 
