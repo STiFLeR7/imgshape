@@ -155,4 +155,77 @@ pre.json { white-space: pre-wrap; word-break: break-word; }
 /* Slightly larger hit area for small controls */
 .tiny, .btn, .small { -webkit-tap-highlight-color: transparent; }
 
+/* v4 Atlas specific styles */
+.version-select{
+  width:100%;padding:10px;border-radius:10px;background:var(--glass);border:1px solid var(--glass-border);
+  color:var(--text);outline:none;font-size:14px;font-weight:600;cursor:pointer;
+  transition: box-shadow var(--transition-fast), border-color var(--transition-fast);
+}
+.version-select:focus{box-shadow:0 0 18px rgba(106,151,255,0.06);border-color:rgba(138,124,255,0.18)}
+
+.version-select option{background:var(--bg-2);color:var(--text);padding:8px}
+
+select{
+  width:100%;padding:10px;border-radius:10px;background:var(--glass);border:1px solid var(--glass-border);
+  color:var(--text);outline:none;font-size:14px;cursor:pointer;
+  transition: box-shadow var(--transition-fast), border-color var(--transition-fast);
+}
+select:focus{box-shadow:0 0 18px rgba(106,151,255,0.06);border-color:rgba(138,124,255,0.18)}
+
+input[type="number"]{
+  width:100%;padding:10px;border-radius:10px;background:var(--glass);border:1px solid var(--glass-border);
+  color:var(--text);outline:none;transition: box-shadow var(--transition-fast), border-color var(--transition-fast);
+}
+input[type="number"]:focus{box-shadow:0 0 18px rgba(106,151,255,0.06);border-color:rgba(138,124,255,0.18)}
+
+.form-row{margin-bottom:12px}
+.label{display:block;font-size:13px;font-weight:600;color:var(--muted);margin-bottom:6px}
+
+.section{padding:12px}
+
+.actions{display:flex;gap:10px;margin-top:16px}
+.actions .btn{flex:1}
+
+/* Log entries for better visualization */
+.log-entry{padding:4px 0;display:flex;gap:8px;border-bottom:1px solid rgba(255,255,255,0.01)}
+.log-entry .time{color:var(--muted);font-size:11px;font-family:var(--mono)}
+.log-entry .msg{font-size:13px}
+.log-entry.info .msg{color:var(--accent-3)}
+.log-entry.success .msg{color:var(--accent-3);font-weight:600}
+.log-entry.error .msg{color:#ff6e6e;font-weight:600}
+
+/* v4 Status badges */
+.badge.muted{background:rgba(255,255,255,0.02);color:var(--muted)}
+.badge.success{background:rgba(95,227,161,0.06);color:var(--accent-3);font-weight:600}
+.badge.error{background:rgba(255,110,110,0.06);color:#ff6e6e;font-weight:600}
+
+/* JSON toolbar */
+.json-toolbar{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+.json-toolbar .tiny{background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.02)}
+.json-toolbar .tiny:hover{background:rgba(138,124,255,0.06);border-color:rgba(138,124,255,0.12)}
+
+/* Main layout adjustments for v4 */
+.main{flex:1;display:flex;flex-direction:column;gap:20px}
+.output-panel{flex:1;min-width:0}
+.preview-panel{width:45%;min-width:340px}
+
+.bottom{width:100%}
+.logs{padding:16px}
+
+.meta{font-size:13px;color:var(--muted);text-align:center;margin-top:8px}
+
+/* Preview image display */
+#imgPreview{display:none;max-width:100%;max-height:320px;object-fit:contain;border-radius:8px;box-shadow:0 8px 30px rgba(0,0,0,0.35)}
+#previewSmall{display:none;width:64px;height:64px;background-size:cover;background-position:center}
+
+/* Top brand alternate styling */
+.top-brand{padding:8px 12px}
+
+.btn-link{color:var(--accent);text-decoration:none;padding:8px 14px;font-weight:600;font-size:14px;border-radius:8px;transition:background var(--transition-fast)}
+.btn-link:hover{background:rgba(107,230,255,0.04)}
+
+.nav-right{display:flex;align-items:center;gap:12px}
+.nav-right .api-base{width:200px;padding:8px 12px;font-size:13px}
+
 /* End of file */
+

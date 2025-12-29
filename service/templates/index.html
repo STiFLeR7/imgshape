@@ -3,109 +3,257 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>imgshape · Live (v3.0.0)</title>
+  <title>imgshape v4.0.0 Atlas · Dataset Intelligence Platform</title>
 
   <!-- Theme and styling -->
-  <meta name="theme-color" content="#0b0d10">
+  <meta name="theme-color" content="#0a0e27">
   <link rel="stylesheet" href="/static/style.css">
-  <link rel="icon" type="image/png" href="/static/assets/sample_images/imgshape_lg.png" />
+  <link rel="icon" type="image/png" href="/static/imgshape.png" />
 
   <!-- OpenGraph -->
-  <meta property="og:title" content="imgshape" />
-  <meta property="og:description" content="Dataset & image readiness analysis for AI/ML." />
-  <meta property="og:image" content="/static/assets/sample_images/imgshape_lg.png" />
+  <meta property="og:title" content="imgshape v4.0.0 Atlas" />
+  <meta property="og:description" content="Dataset Intelligence Layer - Deterministic Fingerprinting & Decision Engine for AI/ML Pipelines." />
+  <meta property="og:image" content="/static/imgshape.png" />
+
+  <!-- Inject API endpoints from FastAPI -->
+  <script>
+    window.IMGSHAPE = {{ endpoints | tojson }};
+    window.IMGSHAPE.v4Available = {{ v4_available | tojson }};
+  </script>
 </head>
 <body>
-  <nav class="topbar">
-    <div class="brand liquid-glass top-brand" role="banner" aria-label="imgshape brand">
-      <img id="brandLogo" class="brand-logo" src="/static/assets/sample_images/imgshape_lg.png" alt="imgshape logo" />
-      <div class="brand-text">
-        <div class="app-name">imgshape</div>
-        <div class="version">v3.0.0</div>
+  <!-- Modern Header -->
+  <header class="header">
+    <div class="header-content">
+      <div class="brand-container">
+        <img src="/static/imgshape.png" alt="imgshape" class="logo" />
+        <div class="brand-info">
+          <h1 class="brand-title">imgshape</h1>
+          <span class="brand-version">v4.0.0 Atlas{% if v4_available %} <span class="status-dot"></span>{% endif %}</span>
+        </div>
       </div>
+      <nav class="nav-links">
+        <a href="https://github.com/STiFLeR7/imgshape" target="_blank" class="nav-link">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"></path>
+          </svg>
+          GitHub
+        </a>
+        <a href="https://stifler7.github.io/imgshape/" target="_blank" class="nav-link">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+            <polyline points="14 2 14 8 20 8"></polyline>
+            <line x1="16" y1="13" x2="8" y2="13"></line>
+            <line x1="16" y1="17" x2="8" y2="17"></line>
+            <polyline points="10 9 9 9 8 9"></polyline>
+          </svg>
+          Docs
+        </a>
+      </nav>
     </div>
+  </header>
 
-    <div class="nav-right">
-      <input id="apiBase" class="api-base" placeholder="API base (defaults to /)" title="Set API base (optional)" />
-      <a id="help-link" class="btn-link" href="https://pypi.org/project/imgshape" target="_blank">Docs</a>
-    </div>
-  </nav>
-
-  <main class="container">
-    <aside class="sidebar card">
-      <div class="section">
-        <label class="label">Image (drag & drop or click)</label>
-        <div id="dropzone" class="dropzone">
-          <input id="fileInput" type="file" accept="image/*" />
-          <div class="drop-hint">Drop image here — JPG/PNG (max 10MB)</div>
-          <div id="previewSmall" class="preview-thumb" aria-hidden="true"></div>
+  <main class="app-container">
+    <!-- Left Sidebar - Controls -->
+    <aside class="sidebar">
+      <div class="sidebar-section">
+        <h3 class="section-title">Configuration</h3>
+        
+        <!-- API Version -->
+        <div class="form-group">
+          <label class="form-label">API Version</label>
+          <select id="versionSelect" class="form-select">
+            <option value="v3">v3 (Legacy Analysis)</option>
+            {% if v4_available %}
+            <option value="v4" selected>v4 (Atlas Fingerprinting)</option>
+            {% else %}
+            <option value="v4" disabled>v4 (Not Available)</option>
+            {% endif %}
+          </select>
         </div>
 
-        <div class="form-row">
-          <label class="label">Or dataset path (server)</label>
-          <input id="pathInput" type="text" placeholder="/data/my_dataset" />
+        <!-- Image Upload -->
+        <div class="form-group">
+          <label class="form-label">Upload Image</label>
+          <div id="dropzone" class="upload-zone">
+            <input id="fileInput" type="file" accept="image/*" style="display: none;" />
+            <svg class="upload-icon" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+              <polyline points="17 8 12 3 7 8"></polyline>
+              <line x1="12" y1="3" x2="12" y2="15"></line>
+            </svg>
+            <p class="upload-text">Drop image or click to browse</p>
+            <p class="upload-hint">JPG, PNG • Max 10MB</p>
+            <div id="previewSmall" class="upload-preview"></div>
+          </div>
         </div>
 
-        <div class="form-row">
-          <label class="label">Prefs (comma separated)</label>
-          <input id="prefsInput" type="text" placeholder="fast,small,quality" />
+        <!-- Dataset Path -->
+        <div class="form-group">
+          <label class="form-label">Or Dataset Path</label>
+          <input id="pathInput" type="text" class="form-input" placeholder="/data/my_dataset" />
         </div>
 
-        <div class="form-row">
-          <label class="label">Model (compatibility)</label>
-          <input id="modelInput" type="text" placeholder="mobilenet_v2 or ResNet50" />
+        <!-- v4 Options -->
+        <div id="v4Options" class="options-container" style="{% if not v4_available %}display:none;{% endif %}">
+          <div class="form-group">
+            <label class="form-label">Task Type</label>
+            <select id="taskInput" class="form-select">
+              <option value="classification">Classification</option>
+              <option value="detection">Detection</option>
+              <option value="segmentation">Segmentation</option>
+              <option value="generation">Generation</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Deployment Target</label>
+            <select id="deploymentInput" class="form-select">
+              <option value="cloud">Cloud</option>
+              <option value="edge">Edge</option>
+              <option value="mobile">Mobile</option>
+              <option value="embedded">Embedded</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Priority</label>
+            <select id="priorityInput" class="form-select">
+              <option value="accuracy">Accuracy</option>
+              <option value="speed">Speed</option>
+              <option value="size">Size</option>
+              <option value="balanced" selected>Balanced</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Max Model Size (MB)</label>
+            <input id="maxSizeInput" type="number" class="form-input" placeholder="Optional" min="1" />
+          </div>
         </div>
 
-        <div class="row actions">
-          <button id="analyzeBtn" class="btn primary">Analyze</button>
-          <button id="recommendBtn" class="btn">Recommend</button>
+        <!-- v3 Options -->
+        <div id="v3Options" class="options-container" style="display:none;">
+          <div class="form-group">
+            <label class="form-label">Preferences</label>
+            <input id="prefsInput" type="text" class="form-input" placeholder="fast, small, quality" />
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Model</label>
+            <input id="modelInput" type="text" class="form-input" placeholder="mobilenet_v2" />
+          </div>
         </div>
 
-        <div class="row actions">
-          <button id="compatBtn" class="btn full">Check Compatibility</button>
+        <!-- Action Buttons -->
+        <div class="button-group">
+          <button id="analyzeBtn" class="btn btn-primary">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="11" cy="11" r="8"></circle>
+              <path d="m21 21-4.35-4.35"></path>
+            </svg>
+            Analyze
+          </button>
+          <button id="fingerprintBtn" class="btn btn-secondary" style="{% if not v4_available %}display:none;{% endif %}">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M2 12C2 6.5 6.5 2 12 2a10 10 0 0 1 8 4"></path>
+              <path d="M5 19.5C5.5 18 6 15 6 12c0-.7.12-1.37.34-2"></path>
+              <path d="M17.29 21.02c.12-.6.43-2.3.5-3.02"></path>
+              <path d="M12 10a2 2 0 0 0-2 2c0 1.02-.1 2.51-.26 4"></path>
+              <path d="M8.65 22c.21-.66.45-1.32.57-2"></path>
+              <path d="M14 13.12c0 2.38 0 6.38-1 8.88"></path>
+              <path d="M2 16h.01"></path>
+              <path d="M21.8 16c.2-2 .131-5.354 0-6"></path>
+              <path d="M9 6.8a6 6 0 0 1 9 5.2c0 .47 0 1.17-.02 2"></path>
+            </svg>
+            Fingerprint
+          </button>
         </div>
 
-        <hr class="separator" />
+        <!-- v3 Actions -->
+        <div id="v3Actions" class="button-group" style="display:none;">
+          <button id="recommendBtn" class="btn btn-secondary">Recommend</button>
+          <button id="compatBtn" class="btn btn-ghost">Check Compatibility</button>
+        </div>
+      </div>
 
-        <div class="muted small">Click <strong>Download JSON</strong> to save full results.</div>
-
-        <div class="row">
-          <button id="downloadBtn" class="btn ghost">Download JSON</button>
-          <button id="copyBtn" class="btn ghost">Copy JSON</button>
+      <!-- Export Section -->
+      <div class="sidebar-section">
+        <h3 class="section-title">Export</h3>
+        <div class="button-group-vertical">
+          <button id="downloadBtn" class="btn btn-ghost btn-small">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+              <polyline points="7 10 12 15 17 10"></polyline>
+              <line x1="12" y1="15" x2="12" y2="3"></line>
+            </svg>
+            Download JSON
+          </button>
+          <button id="copyBtn" class="btn btn-ghost btn-small">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+            </svg>
+            Copy JSON
+          </button>
         </div>
       </div>
     </aside>
 
-    <section class="main">
-      <div class="toprow">
-        <div class="panel card preview-panel">
-          <div class="panel-head">Preview</div>
-          <div id="preview" class="preview-area glass-surface">
-            <img id="imgPreview" alt="preview" />
-            <div id="imgMeta" class="meta"></div>
+    <!-- Main Content Area -->
+    <div class="content-area">
+      <!-- Preview Panel -->
+      <section class="panel">
+        <div class="panel-header">
+          <h3 class="panel-title">Image Preview</h3>
+          <div id="statusBadge" class="status-badge">idle</div>
+        </div>
+        <div class="panel-body preview-container">
+          <div id="progress" class="progress-bar">
+            <div class="progress-fill"></div>
           </div>
-          <div id="progress" class="progress-bar"><div class="progress-inner"></div></div>
-        </div>
-
-        <div class="panel card output-panel">
-          <div class="panel-head">JSON Output</div>
-          <div id="jsonToolbar" class="json-toolbar">
-            <button id="prettyBtn" class="tiny">Pretty</button>
-            <button id="rawBtn" class="tiny">Raw</button>
-            <div class="flex-spacer"></div>
-            <div id="statusBadge" class="badge muted">idle</div>
+          <div id="preview" class="image-preview">
+            <img id="imgPreview" alt="preview" class="preview-image" />
+            <div id="imgMeta" class="image-meta"></div>
           </div>
-          <pre id="jsonOutput" class="json"></pre>
         </div>
-      </div>
+      </section>
 
-      <div class="bottom">
-        <div class="card logs">
-          <div class="panel-head">Logs</div>
-          <div id="logArea" class="log"></div>
+      <!-- Results Panel -->
+      <section class="panel">
+        <div class="panel-header">
+          <h3 class="panel-title">Analysis Results</h3>
+          <div class="panel-actions">
+            <button id="prettyBtn" class="btn-icon active" title="Pretty Print">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="16 18 22 12 16 6"></polyline>
+                <polyline points="8 6 2 12 8 18"></polyline>
+              </svg>
+            </button>
+            <button id="rawBtn" class="btn-icon" title="Raw JSON">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M4 7h16M4 12h16M4 17h16"></path>
+              </svg>
+            </button>
+          </div>
         </div>
-      </div>
-    </section>
+        <div class="panel-body">
+          <pre id="jsonOutput" class="json-output"></pre>
+        </div>
+      </section>
+
+      <!-- Logs Panel -->
+      <section class="panel">
+        <div class="panel-header">
+          <h3 class="panel-title">Logs</h3>
+        </div>
+        <div class="panel-body">
+          <div id="logArea" class="log-output"></div>
+        </div>
+      </section>
+    </div>
   </main>
 
   <script type="module" src="/static/app.js"></script>

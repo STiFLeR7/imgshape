@@ -1,9 +1,9 @@
 # src/imgshape/cli.py
 """
-imgshape CLI (v3.0.0 compat)
-- Preserves v2 CLI commands
-- Adds `--web` to directly launch Streamlit UI (root-level app.py)
-- Removes deprecated gui.py dependency
+imgshape CLI (v4.0.0 Atlas)
+- Preserves v2/v3 CLI commands for backward compatibility
+- Adds v4 Atlas commands: --atlas, --fingerprint, --decisions
+- Adds `--web` to directly launch web UI (service/app.py)
 """
 
 from __future__ import annotations
@@ -36,12 +36,23 @@ try:
 except Exception:
     load_plugins_from_dir = None
 
+# v4 Atlas modules
+try:
+    from imgshape.atlas import Atlas, analyze_dataset as analyze_dataset_v4
+    from imgshape.atlas import fingerprint_only as fingerprint_dataset
+    V4_AVAILABLE = True
+except Exception:
+    Atlas = None
+    analyze_dataset_v4 = None
+    fingerprint_dataset = None
+    V4_AVAILABLE = False
+
 
 # ----------------------------
 # CLI argument parser
 # ----------------------------
 def cli_args() -> argparse.Namespace:
-    p = argparse.ArgumentParser(prog="imgshape", description="imgshape CLI (v3)")
+    p = argparse.ArgumentParser(prog="imgshape", description="imgshape CLI (v4.0.0 Atlas)")
 
     # Core arguments
     p.add_argument("--path", type=str, help="Path to image or dataset folder")
@@ -49,20 +60,35 @@ def cli_args() -> argparse.Namespace:
     p.add_argument("--batch", action="store_true", help="Batch mode (operate on folder)")
     p.add_argument("--verbose", action="store_true", help="Verbose output")
 
-    # Core actions
-    p.add_argument("--analyze", action="store_true", help="Analyze image/dataset")
+    # Core actions (v2/v3 compatibility)
+    p.add_argument("--analyze", action="store_true", help="Analyze image/dataset (v3)")
     p.add_argument("--shape", action="store_true", help="Get shape for image")
     p.add_argument("--shape-batch", action="store_true", help="Get shapes for a directory")
-    p.add_argument("--recommend", action="store_true", help="Recommend preprocessing pipeline")
+    p.add_argument("--recommend", action="store_true", help="Recommend preprocessing pipeline (v3)")
     p.add_argument("--augment", action="store_true", help="Include augmentation suggestions")
+
+    # v4 Atlas actions
+    p.add_argument("--atlas", action="store_true", help="Run full Atlas analysis (v4 fingerprint + decisions + artifacts)")
+    p.add_argument("--fingerprint", action="store_true", help="Extract v4 dataset fingerprint only")
+    p.add_argument("--decisions", action="store_true", help="Make decisions from fingerprint (requires --fingerprint-file)")
+    p.add_argument("--fingerprint-file", type=str, help="Path to existing fingerprint.json (for --decisions)")
+    
+    # v4 intent parameters
+    p.add_argument("--task", type=str, choices=["classification", "detection", "segmentation", "generation", "other"], 
+                   default="classification", help="Task type (v4)")
+    p.add_argument("--deployment", type=str, choices=["cloud", "edge", "mobile", "embedded", "other"], 
+                   default="cloud", help="Deployment target (v4)")
+    p.add_argument("--priority", type=str, choices=["accuracy", "speed", "size", "balanced"], 
+                   default="balanced", help="Optimization priority (v4)")
+    p.add_argument("--max-model-size", type=int, help="Max model size in MB (v4)")
 
     # Visualization and report
     p.add_argument("--viz", type=str, help="Plot dataset shape distribution")
     p.add_argument("--report", action="store_true", help="Generate Markdown/HTML report")
     p.add_argument("--out", type=str, help="Output file for JSON/report")
 
-    # New: direct web launch (Streamlit)
-    p.add_argument("--web", action="store_true", help="Launch Streamlit web app (root app.py)")
+    # Direct web launch
+    p.add_argument("--web", action="store_true", help="Launch FastAPI web service")
 
     # v3 additions (pipeline, plugins, etc.)
     p.add_argument("--pipeline-export", action="store_true", help="Export recommended pipeline as code/json/yaml")
@@ -135,26 +161,82 @@ def main() -> None:
         except Exception as e:
             print(f"❌ Visualization failed: {e}")
 
-    # --- NEW: Streamlit Web UI launch ---
+    # --- v4 Atlas commands ---
+    if args.atlas and args.path and V4_AVAILABLE:
+        print(f"\n🗺️ Running Atlas v4 analysis: {args.path}")
+        try:
+            from imgshape.decision_v4 import UserIntent, TaskType, DeploymentTarget, Priority
+            
+            intent = UserIntent(
+                task=TaskType(args.task.upper()),
+                deployment_target=DeploymentTarget(args.deployment.upper()),
+                priority=Priority(args.priority.upper()),
+            )
+            
+            result = analyze_dataset_v4(args.path, user_intent=intent)
+            result_dict = result if isinstance(result, dict) else (result.to_dict() if hasattr(result, 'to_dict') else result)
+            
+            if args.out:
+                out_path = Path(args.out)
+                out_path.write_text(json.dumps(result_dict, indent=2), encoding="utf-8")
+                print(f"✅ Saved Atlas result to: {out_path}")
+            else:
+                print(json.dumps(result_dict, indent=2))
+                
+        except Exception as e:
+            print(f"❌ Atlas analysis failed: {e}")
+            if args.verbose:
+                import traceback
+                traceback.print_exc()
+                
+    elif args.atlas and not V4_AVAILABLE:
+        print("❌ v4 Atlas not available. Check installation.")
+        
+    # v4 Fingerprint only
+    if args.fingerprint and args.path and V4_AVAILABLE:
+        print(f"\n👆 Extracting v4 fingerprint: {args.path}")
+        try:
+            result = fingerprint_dataset(args.path)
+            result_dict = result.to_dict() if hasattr(result, 'to_dict') else result
+            
+            if args.out:
+                out_path = Path(args.out)
+                out_path.write_text(json.dumps(result_dict, indent=2), encoding="utf-8")
+                print(f"✅ Saved fingerprint to: {out_path}")
+            else:
+                print(json.dumps(result_dict, indent=2))
+                
+        except Exception as e:
+            print(f"❌ Fingerprint extraction failed: {e}")
+            if args.verbose:
+                import traceback
+                traceback.print_exc()
+                
+    elif args.fingerprint and not V4_AVAILABLE:
+        print("❌ v4 fingerprint not available. Check installation.")
+
+    # --- NEW: FastAPI Web UI launch ---
     if args.web:
-        app_path = Path(__file__).resolve().parents[2] / "app.py"
-        if not app_path.exists():
-            print(f"❌ Could not find app.py at expected location: {app_path}")
-            print("Place your Streamlit entrypoint at the repository root as app.py, or run manually:")
-            print("   streamlit run app.py")
+        service_path = Path(__file__).resolve().parents[2] / "service" / "app.py"
+        if not service_path.exists():
+            print(f"❌ Could not find service/app.py at expected location: {service_path}")
+            print("Run the web service manually with:")
+            print("   uvicorn service.app:app --reload")
             sys.exit(1)
 
-        print(f"🚀 Launching Streamlit app at: {app_path}")
+        print(f"🚀 Launching FastAPI service at: {service_path}")
+        print("   Open browser at: http://localhost:8000")
         try:
             subprocess.run(
-                [sys.executable, "-m", "streamlit", "run", str(app_path)],
+                ["uvicorn", "service.app:app", "--reload"],
                 check=True,
+                cwd=str(service_path.parent.parent)
             )
         except FileNotFoundError:
-            print("❌ Streamlit not installed. Install it via:")
-            print("   pip install streamlit")
+            print("❌ uvicorn not installed. Install it via:")
+            print("   pip install uvicorn[standard]")
         except subprocess.CalledProcessError as e:
-            print(f"❌ Streamlit process failed: {e}")
+            print(f"❌ Web service process failed: {e}")
         except KeyboardInterrupt:
             print("\n🛑 Web UI stopped by user.")
 

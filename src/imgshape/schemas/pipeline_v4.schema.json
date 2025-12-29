@@ -1,0 +1,149 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://imgshape.ai/schemas/pipeline.v4.0.schema.json",
+  "title": "Pipeline Artifact Schema",
+  "description": "Deployable pipeline configuration for imgshape v4.0.0 (Atlas)",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "pipeline_id",
+    "source_fingerprint",
+    "stages"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "4.0"
+    },
+    "pipeline_id": {
+      "type": "string",
+      "description": "Unique identifier for this pipeline"
+    },
+    "source_fingerprint": {
+      "type": "string",
+      "description": "Dataset URI that this pipeline was generated from"
+    },
+    "stages": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["stage_id", "operation", "parameters"],
+        "properties": {
+          "stage_id": {
+            "type": "string",
+            "description": "Unique identifier for this stage"
+          },
+          "operation": {
+            "type": "string",
+            "enum": [
+              "resize",
+              "normalize",
+              "augment",
+              "crop",
+              "pad",
+              "color_adjust",
+              "filter",
+              "transform",
+              "validate"
+            ]
+          },
+          "parameters": {
+            "type": "object",
+            "description": "Operation-specific parameters"
+          },
+          "conditional": {
+            "type": "object",
+            "description": "Conditions under which this stage should execute",
+            "properties": {
+              "if": {
+                "type": "string",
+                "description": "Condition expression"
+              },
+              "else_skip": {
+                "type": "boolean"
+              }
+            }
+          },
+          "rationale": {
+            "type": "string",
+            "description": "Why this stage is included in the pipeline"
+          }
+        }
+      },
+      "minItems": 1
+    },
+    "model_recommendation": {
+      "type": "object",
+      "properties": {
+        "family": {
+          "type": "string"
+        },
+        "architecture": {
+          "type": "string"
+        },
+        "pretrained": {
+          "type": "boolean"
+        },
+        "input_shape": {
+          "type": "array",
+          "items": {"type": "integer"},
+          "minItems": 2,
+          "maxItems": 4
+        }
+      }
+    },
+    "training_hints": {
+      "type": "object",
+      "properties": {
+        "recommended_batch_size": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "learning_rate_range": {
+          "type": "object",
+          "properties": {
+            "min": {"type": "number", "minimum": 0},
+            "max": {"type": "number", "minimum": 0}
+          }
+        },
+        "epochs_estimate": {
+          "type": "object",
+          "properties": {
+            "min": {"type": "integer", "minimum": 1},
+            "max": {"type": "integer", "minimum": 1}
+          }
+        },
+        "regularization": {
+          "type": "object",
+          "properties": {
+            "dropout": {"type": "number", "minimum": 0, "maximum": 1},
+            "weight_decay": {"type": "number", "minimum": 0}
+          }
+        }
+      }
+    },
+    "metadata": {
+      "type": "object",
+      "properties": {
+        "generated_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "imgshape_version": {
+          "type": "string"
+        },
+        "deterministic": {
+          "type": "boolean",
+          "description": "Whether this pipeline produces deterministic results"
+        },
+        "framework_targets": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["pytorch", "tensorflow", "jax", "numpy"]
+          }
+        }
+      }
+    }
+  }
+}

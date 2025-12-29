@@ -1,0 +1,293 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://imgshape.ai/schemas/fingerprint.v4.0.schema.json",
+  "title": "Dataset Fingerprint Schema",
+  "description": "Canonical semantic identity for a dataset in imgshape v4.0.0 (Atlas)",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "dataset_uri",
+    "profiles",
+    "derived_class",
+    "confidence"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "4.0",
+      "description": "Schema version identifier"
+    },
+    "dataset_uri": {
+      "type": "string",
+      "pattern": "^imgshape://",
+      "description": "Canonical URI identifying the dataset class (e.g., imgshape://vision/photographic/high_entropy)"
+    },
+    "profiles": {
+      "type": "object",
+      "required": ["spatial", "signal", "distribution", "quality", "semantic"],
+      "properties": {
+        "spatial": {
+          "$ref": "#/definitions/SpatialProfile"
+        },
+        "signal": {
+          "$ref": "#/definitions/SignalProfile"
+        },
+        "distribution": {
+          "$ref": "#/definitions/DistributionProfile"
+        },
+        "quality": {
+          "$ref": "#/definitions/QualityProfile"
+        },
+        "semantic": {
+          "$ref": "#/definitions/SemanticProfile"
+        }
+      },
+      "additionalProperties": false
+    },
+    "derived_class": {
+      "type": "string",
+      "pattern": "^vision\\.",
+      "description": "Derived dataset class identifier (e.g., vision.photographic.high_entropy)"
+    },
+    "confidence": {
+      "type": "number",
+      "minimum": 0.0,
+      "maximum": 1.0,
+      "description": "Confidence score for the derived classification"
+    },
+    "metadata": {
+      "type": "object",
+      "description": "Optional metadata about the fingerprinting process",
+      "properties": {
+        "timestamp": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "imgshape_version": {
+          "type": "string"
+        },
+        "sample_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "analysis_duration_ms": {
+          "type": "number",
+          "minimum": 0
+        }
+      }
+    }
+  },
+  "definitions": {
+    "SpatialProfile": {
+      "type": "object",
+      "description": "Geometric constraints and resizing risk assessment",
+      "required": ["resolution_range", "aspect_ratio_variance", "resize_risk"],
+      "properties": {
+        "resolution_range": {
+          "type": "object",
+          "required": ["min", "max", "median"],
+          "properties": {
+            "min": {
+              "type": "object",
+              "required": ["width", "height"],
+              "properties": {
+                "width": {"type": "integer", "minimum": 1},
+                "height": {"type": "integer", "minimum": 1}
+              }
+            },
+            "max": {
+              "type": "object",
+              "required": ["width", "height"],
+              "properties": {
+                "width": {"type": "integer", "minimum": 1},
+                "height": {"type": "integer", "minimum": 1}
+              }
+            },
+            "median": {
+              "type": "object",
+              "required": ["width", "height"],
+              "properties": {
+                "width": {"type": "integer", "minimum": 1},
+                "height": {"type": "integer", "minimum": 1}
+              }
+            }
+          }
+        },
+        "aspect_ratio_variance": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Variance in aspect ratios across dataset"
+        },
+        "resize_risk": {
+          "type": "string",
+          "enum": ["low", "medium", "high"],
+          "description": "Risk level for resizing operations"
+        },
+        "geometry_class": {
+          "type": "string",
+          "enum": ["uniform", "diverse", "extreme"],
+          "description": "Classification of geometric diversity"
+        }
+      }
+    },
+    "SignalProfile": {
+      "type": "object",
+      "description": "Information density and noise characteristics",
+      "required": ["entropy", "noise_estimate", "capacity_ceiling"],
+      "properties": {
+        "entropy": {
+          "type": "object",
+          "required": ["mean", "std", "range"],
+          "properties": {
+            "mean": {"type": "number", "minimum": 0},
+            "std": {"type": "number", "minimum": 0},
+            "range": {
+              "type": "object",
+              "required": ["min", "max"],
+              "properties": {
+                "min": {"type": "number", "minimum": 0},
+                "max": {"type": "number", "minimum": 0}
+              }
+            }
+          }
+        },
+        "noise_estimate": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Estimated noise level (0=clean, 1=very noisy)"
+        },
+        "capacity_ceiling": {
+          "type": "string",
+          "enum": ["lightweight", "standard", "heavy", "unlimited"],
+          "description": "Maximum recommended model capacity based on signal density"
+        },
+        "information_density": {
+          "type": "string",
+          "enum": ["sparse", "moderate", "dense", "very_dense"],
+          "description": "Overall information density classification"
+        }
+      }
+    },
+    "DistributionProfile": {
+      "type": "object",
+      "description": "Dataset structure and imbalance characteristics",
+      "required": ["class_balance", "sampling_strategy"],
+      "properties": {
+        "class_balance": {
+          "type": "object",
+          "required": ["type", "imbalance_ratio"],
+          "properties": {
+            "type": {
+              "type": "string",
+              "enum": ["balanced", "slightly_imbalanced", "highly_imbalanced", "extreme_imbalance", "unknown"]
+            },
+            "imbalance_ratio": {
+              "type": "number",
+              "minimum": 1,
+              "description": "Ratio of largest to smallest class"
+            },
+            "class_count": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Number of classes detected (0 if unlabeled)"
+            }
+          }
+        },
+        "sampling_strategy": {
+          "type": "string",
+          "enum": ["uniform", "weighted", "oversampling", "undersampling"],
+          "description": "Recommended sampling approach"
+        },
+        "loss_recommendation": {
+          "type": "string",
+          "enum": ["cross_entropy", "focal_loss", "weighted_ce", "balanced_ce"],
+          "description": "Recommended loss function based on distribution"
+        }
+      }
+    },
+    "QualityProfile": {
+      "type": "object",
+      "description": "Trustworthiness and data quality assessment",
+      "required": ["overall_quality", "warnings"],
+      "properties": {
+        "overall_quality": {
+          "type": "string",
+          "enum": ["excellent", "good", "acceptable", "poor", "critical"],
+          "description": "Overall quality assessment"
+        },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["severity", "category", "message"],
+            "properties": {
+              "severity": {
+                "type": "string",
+                "enum": ["info", "warning", "error", "critical"]
+              },
+              "category": {
+                "type": "string",
+                "enum": ["corruption", "duplication", "resolution", "format", "missing_data"]
+              },
+              "message": {
+                "type": "string"
+              },
+              "affected_count": {
+                "type": "integer",
+                "minimum": 0
+              }
+            }
+          }
+        },
+        "corruption_rate": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Fraction of corrupted/unreadable images"
+        },
+        "duplication_rate": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Estimated fraction of duplicate images"
+        }
+      }
+    },
+    "SemanticProfile": {
+      "type": "object",
+      "description": "Semantic classification that gates decision branches",
+      "required": ["primary_domain", "content_type"],
+      "properties": {
+        "primary_domain": {
+          "type": "string",
+          "enum": ["photographic", "medical", "document", "synthetic", "mixed", "unknown"],
+          "description": "Primary semantic domain of the dataset"
+        },
+        "content_type": {
+          "type": "string",
+          "enum": ["natural", "text_dense", "low_signal", "high_entropy", "structured", "unstructured"],
+          "description": "Content type classification"
+        },
+        "characteristics": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "grayscale", "color", "monochrome",
+              "high_contrast", "low_contrast",
+              "fine_detail", "coarse_detail",
+              "edge_rich", "texture_rich",
+              "temporal", "spatial_only"
+            ]
+          },
+          "description": "Additional semantic characteristics"
+        },
+        "specialization_required": {
+          "type": "boolean",
+          "description": "Whether specialized processing is required for this domain"
+        }
+      }
+    }
+  }
+}

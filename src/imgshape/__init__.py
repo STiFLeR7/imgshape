@@ -1,6 +1,6 @@
 # src/imgshape/__init__.py
 """
-imgshape package public API (v2.2.0 -> v3.0.0) — lazy exports + safe optional telemetry.
+imgshape package public API (v2.2.0 -> v3.0.0 -> v4.0.0) — lazy exports + safe optional telemetry.
 
 Behavior:
 - Avoid importing heavy submodules at import-time.
@@ -8,6 +8,7 @@ Behavior:
 - Telemetry (klyne) is initialized only when env var KLYNE_API_KEY is present.
 - Safe: import-time failures are swallowed so users don't get ImportError when optional deps are missing.
 - v3 additions: pipeline, recommender & plugin helpers exposed lazily.
+- v4 additions: Atlas, fingerprinting, and decision engine exposed directly.
 """
 
 from __future__ import annotations
@@ -47,6 +48,16 @@ __all__ = [
     "AnalyzerPlugin",
     "RecommenderPlugin",
     "ExporterPlugin",
+    # v4 - Atlas (eager import for better UX)
+    "Atlas",
+    "analyze_dataset_v4",
+    "fingerprint_dataset",
+    "FingerprintExtractor",
+    "DecisionEngine",
+    "UserIntent",
+    "TaskType",
+    "DeploymentTarget",
+    "Priority",
     "__version__",
 ]
 
@@ -91,6 +102,16 @@ _lazy_map = {
     "AnalyzerPlugin": ("imgshape.plugins", "AnalyzerPlugin"),
     "RecommenderPlugin": ("imgshape.plugins", "RecommenderPlugin"),
     "ExporterPlugin": ("imgshape.plugins", "ExporterPlugin"),
+    # v4 - Atlas integration (updated to direct imports, no v4 subfolder)
+    "Atlas": ("imgshape.atlas", "Atlas"),
+    "analyze_dataset_v4": ("imgshape.atlas", "analyze_dataset"),
+    "fingerprint_dataset": ("imgshape.atlas", "fingerprint_only"),
+    "FingerprintExtractor": ("imgshape.fingerprint_v4", "FingerprintExtractor"),
+    "DecisionEngine": ("imgshape.decision_v4", "DecisionEngine"),
+    "UserIntent": ("imgshape.decision_v4", "UserIntent"),
+    "TaskType": ("imgshape.decision_v4", "TaskType"),
+    "DeploymentTarget": ("imgshape.decision_v4", "DeploymentTarget"),
+    "Priority": ("imgshape.decision_v4", "Priority"),
 }
 
 

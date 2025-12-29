@@ -18,7 +18,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: [3.11]
+        python-version: ["3.11", "3.12"]
       fail-fast: false
 
     env:
@@ -148,8 +148,21 @@ jobs:
       - name: CLI Test - TorchLoader (transform snippet) (non-blocking)
         run: python -m imgshape.cli --path sample --torchloader --out tmp/transform_snippet.py || true
 
-      - name: Run pytest
+      # ---- v4 Atlas Tests ----
+      - name: CLI Test - v4 Fingerprint
+        run: imgshape --fingerprint --path sample --out tmp/v4_fingerprint.json
+
+      - name: CLI Test - v4 Atlas Analyze
+        run: imgshape --atlas --path sample --intent training --out tmp/v4_analysis.json
+
+      - name: CLI Test - v4 Decisions
+        run: imgshape --decisions --path sample --intent training --out tmp/v4_decisions.json
+
+      - name: Run pytest (all tests)
         run: pytest -q --disable-warnings --maxfail=1
+
+      - name: Run pytest (v4 tests only)
+        run: pytest tests/v4_test.py -v --disable-warnings
 
       - name: Build distributions
         run: python -m build

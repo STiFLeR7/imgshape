@@ -1,15 +1,170 @@
-token.txt
-src/imgshape.egg-info/
+# ============================================================================
+# Python Build & Distribution
+# ============================================================================
+build/
 dist/
+*.egg-info/
+*.egg
+*.whl
+*.tar.gz
+*.zip
 
-src/imgshape/__pycache__/
-src/imgshape/*.pyc  
+# Python Virtual Environments
+venv/
+env/
+ENV/
+.venv
 
-tests/__pycache__/
-tests/*.pyc
-gpt.zip
+# Python Cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Compiled Python files
+*.pyc
+*.pyo
+*.pyd
+
+# ============================================================================
+# Testing & Coverage
+# ============================================================================
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.hypothesis/
+*.cover
+
+# Test artifacts
+test_*.json
+test_*.html
+test_*.md
+
+# ============================================================================
+# Node.js & Frontend
+# ============================================================================
+ui/node_modules/
+ui/.npm/
+ui/build/
+ui/dist.bak
+ui/.next
+
+# npm logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+
+# ============================================================================
+# IDE & Editor
+# ============================================================================
 .vscode/
-list.py
-tmp/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+*.sublime-project
+*.sublime-workspace
+.vim/
 
-analytics_klyne.py
+# ============================================================================
+# Environment & Configuration
+# ============================================================================
+.env
+.env.local
+.env.*.local
+*.local
+token.txt
+
+# ============================================================================
+# Build Artifacts & Temporary Files
+# ============================================================================
+*.log
+*.tmp
+tmp/
+temp/
+.tmp/
+.cache/
+
+# ============================================================================
+# OS Specific
+# ============================================================================
+.DS_Store
+.AppleDouble
+.LSOverride
+Thumbs.db
+ehthumbs.db
+
+# ============================================================================
+# Development & Debug Files
+# ============================================================================
+debug_*.py
+analytics_*.py
+list.py
+
+# ============================================================================
+# Project-Specific Temporary Files
+# ============================================================================
+gpt.zip
+ui.zip
+image.png
+test_fingerprint.json
+
+# Old report files (keep only latest)
+report_new.md
+imgshape_report.html
+imgshape_report.md
+imgshape_report.summary.json
+
+# Backup report files
+report.html
+report.md
+report.summary.json
+
+# ============================================================================
+# Data & Datasets
+# ============================================================================
+datasets/
+data/
+*.csv
+*.xlsx
+
+# ============================================================================
+# Generated Documentation (keep source only)
+# ============================================================================
+site/
+docs/_build/
+
+# ============================================================================
+# Docker Build Context
+# ============================================================================
+.dockerignore
+
+# ============================================================================
+# Google Cloud
+# ============================================================================
+.gcloudignore
+cloudbuild.yaml
+
+# ============================================================================
+# Git
+# ============================================================================
+.git
+.gitignore
+.gitattributes
+
+# ============================================================================
+# Keep These Files (Important)
+# ============================================================================
+# !.github/
+# !LICENSE
+# !README.md
+# !pyproject.toml
+# !setup.py
+# !Dockerfile
+# !requirements.txt

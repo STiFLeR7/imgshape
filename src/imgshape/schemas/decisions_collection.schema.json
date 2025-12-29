@@ -1,0 +1,112 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://imgshape.ai/schemas/decisions_collection.v4.0.schema.json",
+  "title": "Decisions Collection Schema",
+  "description": "Complete collection of all decisions made for a dataset in imgshape v4.0.0 (Atlas)",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "fingerprint_id",
+    "decisions",
+    "metadata"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "4.0"
+    },
+    "fingerprint_id": {
+      "type": "string",
+      "description": "Reference to the dataset URI from the fingerprint"
+    },
+    "decisions": {
+      "type": "object",
+      "required": [
+        "model_family",
+        "input_resolution",
+        "augmentation_strategy",
+        "regularization",
+        "quantization"
+      ],
+      "properties": {
+        "model_family": {
+          "$ref": "decision.schema.json"
+        },
+        "input_resolution": {
+          "$ref": "decision.schema.json"
+        },
+        "augmentation_strategy": {
+          "$ref": "decision.schema.json"
+        },
+        "regularization": {
+          "$ref": "decision.schema.json"
+        },
+        "quantization": {
+          "$ref": "decision.schema.json"
+        },
+        "preprocessing": {
+          "$ref": "decision.schema.json"
+        },
+        "loss_function": {
+          "$ref": "decision.schema.json"
+        },
+        "sampling_strategy": {
+          "$ref": "decision.schema.json"
+        }
+      },
+      "additionalProperties": {
+        "$ref": "decision.schema.json"
+      }
+    },
+    "metadata": {
+      "type": "object",
+      "required": ["timestamp", "imgshape_version"],
+      "properties": {
+        "timestamp": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "imgshape_version": {
+          "type": "string"
+        },
+        "rule_engine_version": {
+          "type": "string"
+        },
+        "user_intent": {
+          "type": "object",
+          "properties": {
+            "task": {
+              "type": "string",
+              "enum": ["classification", "detection", "segmentation", "generation", "other"]
+            },
+            "deployment_target": {
+              "type": "string",
+              "enum": ["cloud", "edge", "mobile", "embedded", "other"]
+            },
+            "priority": {
+              "type": "string",
+              "enum": ["accuracy", "speed", "size", "balanced"]
+            }
+          }
+        },
+        "constraints": {
+          "type": "object",
+          "properties": {
+            "max_model_size_mb": {
+              "type": "number",
+              "minimum": 0
+            },
+            "max_inference_time_ms": {
+              "type": "number",
+              "minimum": 0
+            },
+            "available_memory_mb": {
+              "type": "number",
+              "minimum": 0
+            }
+          }
+        }
+      }
+    }
+  }
+}

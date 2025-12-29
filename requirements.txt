@@ -1,12 +1,40 @@
-streamlit>=1.29
-matplotlib
-pillow
-numpy
-scikit-image
-imgshape==2.2.0
-imgshape [pdf]
-reportlab
-weasyprint
-kaleido
-plotly
-gradio
+# Core Dependencies for imgshape v4.0.0 (Atlas)
+# Deterministic dataset fingerprinting and intelligent decision making
+
+# Image Processing
+pillow>=10.0.0
+numpy>=1.21.0
+scikit-image>=0.20.0
+opencv-python>=4.8.0
+
+# Web API & Service
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+python-multipart>=0.0.6
+pydantic>=2.0.0
+
+# Data Processing & Analysis
+pandas>=2.0.0
+scipy>=1.10.0
+
+# Visualization
+matplotlib>=3.7.0
+plotly>=5.14.0
+
+# Reporting & Export
+reportlab>=4.0.0
+weasyprint>=60.0
+
+# Development & Testing (optional)
+pytest>=7.0.0
+pytest-cov>=4.0.0
+black>=23.0.0
+flake8>=6.0.0
+
+# Optional: PyTorch Support (install with: pip install imgshape[torch])
+# torch>=2.0.0
+# torchvision>=0.15.0
+
+# Optional: Advanced PDF Support (install with: pip install imgshape[pdf])
+# kaleido>=0.2.1
+# pypdf>=3.17.0

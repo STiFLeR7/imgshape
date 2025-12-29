@@ -33,7 +33,7 @@ from fastapi import (
     status,
 )
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from PIL import Image
@@ -44,7 +44,17 @@ from imgshape.compatibility import check_compatibility
 from imgshape.recommender import recommend_preprocessing, recommend_dataset
 from imgshape.shape import get_shape
 
-__version__ = "3.1.0"
+# v4 imports for Atlas functionality
+try:
+    from imgshape.atlas import Atlas, analyze_dataset as analyze_dataset_v4
+    from imgshape.decision_v4 import UserIntent, UserConstraints, TaskType, DeploymentTarget, Priority
+    from imgshape.fingerprint_v4 import FingerprintExtractor
+    V4_AVAILABLE = True
+except ImportError as e:
+    logger.warning(f"v4 modules not available: {e}")
+    V4_AVAILABLE = False
+
+__version__ = "4.0.0"
 
 # -------------------------
 # Configuration (env-driven)
@@ -193,11 +203,47 @@ def make_serializable_response(obj: Any) -> Any:
 
 
 # --------------------- optional UI mounting ---------------------
+# Try to serve built React UI from ui/dist first, fallback to templates/static
+ui_dist_dir = BASE_DIR.parent / "ui" / "dist"
 tpl_dir = BASE_DIR / "templates"
 static_dir = BASE_DIR / "static"
 
 templates: Optional[Jinja2Templates] = None
-if tpl_dir.exists() and static_dir.exists():
+
+# Priority 1: Serve built React UI from ui/dist
+if ui_dist_dir.exists() and (ui_dist_dir / "index.html").exists():
+    logger.info(f"Found React UI at {ui_dist_dir}, serving built app...")
+    app.mount("/static", StaticFiles(directory=str(ui_dist_dir)), name="static")
+    
+    @app.get("/", response_class=HTMLResponse)
+    def ui_index_react(request: Request):
+        """Serve built React UI"""
+        index_html = (ui_dist_dir / "index.html").read_text(encoding="utf-8")
+        return index_html
+    
+    @app.get("/{path_name:path}", response_class=HTMLResponse)
+    def serve_react_assets(path_name: str):
+        """Serve React assets and fallback to index.html for client-side routing"""
+        file_path = ui_dist_dir / path_name
+        
+        # Security check
+        try:
+            file_path = file_path.resolve()
+            if not str(file_path).startswith(str(ui_dist_dir.resolve())):
+                raise HTTPException(status_code=403, detail="Access denied")
+        except Exception:
+            raise HTTPException(status_code=403, detail="Access denied")
+        
+        if file_path.exists() and file_path.is_file():
+            return FileResponse(str(file_path))
+        
+        # Fallback to index.html for React Router SPA
+        index_html = (ui_dist_dir / "index.html").read_text(encoding="utf-8")
+        return index_html
+
+# Priority 2: Fallback to Jinja2 templates
+elif tpl_dir.exists() and static_dir.exists():
+    logger.info(f"React UI not found, falling back to Jinja2 templates at {tpl_dir}...")
     templates = Jinja2Templates(directory=str(tpl_dir))
     app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 
@@ -214,12 +260,17 @@ if tpl_dir.exists() and static_dir.exists():
             "datasets": app.url_path_for("list_datasets"),
             "health": app.url_path_for("health"),
             "download_report": app.url_path_for("download_report"),
+            # v4 endpoints
+            "v4_fingerprint": app.url_path_for("v4_fingerprint") if V4_AVAILABLE else None,
+            "v4_analyze": app.url_path_for("v4_analyze") if V4_AVAILABLE else None,
+            "v4_info": app.url_path_for("v4_info") if V4_AVAILABLE else None,
         }
         context = {
             "request": request,
             "endpoints": endpoints,
             "version": app.version,
             "dataset_registry": DATASET_REGISTRY,
+            "v4_available": V4_AVAILABLE,
         }
         return templates.TemplateResponse("index.html", context)
 else:
@@ -550,9 +601,169 @@ async def check_dataset(
                 logger.warning("Failed to remove tempdir %s: %s", tempdir, e)
 
 
+# --------------------- v4 Atlas endpoints ---------------------
+@app.post("/v4/fingerprint", response_class=JSONResponse)
+async def v4_fingerprint(
+    file: Optional[UploadFile] = File(None),
+    dataset_path: Optional[str] = Form(None),
+    sample_limit: Optional[int] = Form(None),
+):
+    """
+    Extract v4 dataset fingerprint from uploaded file or server path.
+    Returns canonical dataset identity with 5 profiles.
+    """
+    if not V4_AVAILABLE:
+        raise HTTPException(status_code=503, detail="v4 modules not available")
+    
+    tempdir = None
+    try:
+        # Determine dataset source
+        if file:
+            tempdir = Path(tempfile.mkdtemp(prefix="imgshape_v4_"))
+            upload_path = tempdir / file.filename
+            with open(upload_path, "wb") as f:
+                f.write(await file.read())
+            dataset_source = upload_path
+        elif dataset_path:
+            dataset_source = Path(dataset_path)
+            if not dataset_source.exists():
+                raise HTTPException(status_code=404, detail=f"Dataset not found: {dataset_path}")
+        else:
+            raise HTTPException(status_code=400, detail="Provide either file or dataset_path")
+        
+        # Extract fingerprint
+        extractor = FingerprintExtractor(sample_limit=sample_limit)
+        fingerprint = extractor.extract(dataset_source)
+        
+        # Convert to serializable format
+        result = fingerprint.to_dict()
+        
+        return JSONResponse(make_serializable_response(result))
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("v4_fingerprint failed: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if tempdir and tempdir.exists():
+            try:
+                shutil.rmtree(tempdir)
+            except Exception as e:
+                logger.warning("Failed to remove tempdir %s: %s", tempdir, e)
+
+
+@app.post("/v4/analyze", response_class=JSONResponse)
+async def v4_analyze(
+    file: Optional[UploadFile] = File(None),
+    dataset_path: Optional[str] = Form(None),
+    task: str = Form("classification"),
+    deployment: str = Form("cloud"),
+    priority: str = Form("balanced"),
+    sample_limit: Optional[int] = Form(None),
+    max_model_size_mb: Optional[float] = Form(None),
+):
+    """
+    Complete v4 Atlas analysis: fingerprint + decisions + artifacts.
+    Returns fingerprint, decisions, and generates artifacts in temp directory.
+    """
+    if not V4_AVAILABLE:
+        raise HTTPException(status_code=503, detail="v4 modules not available")
+    
+    tempdir = None
+    try:
+        # Determine dataset source
+        if file:
+            tempdir = Path(tempfile.mkdtemp(prefix="imgshape_v4_"))
+            upload_path = tempdir / file.filename
+            with open(upload_path, "wb") as f:
+                f.write(await file.read())
+            dataset_source = upload_path
+            output_dir = tempdir / "output"
+        elif dataset_path:
+            dataset_source = Path(dataset_path)
+            if not dataset_source.exists():
+                raise HTTPException(status_code=404, detail=f"Dataset not found: {dataset_path}")
+            tempdir = Path(tempfile.mkdtemp(prefix="imgshape_v4_"))
+            output_dir = tempdir / "output"
+        else:
+            raise HTTPException(status_code=400, detail="Provide either file or dataset_path")
+        
+        output_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Parse user intent
+        try:
+            intent = UserIntent(
+                task=TaskType[task.upper()],
+                deployment_target=DeploymentTarget[deployment.upper()],
+                priority=Priority[priority.upper()]
+            )
+        except KeyError as e:
+            raise HTTPException(status_code=400, detail=f"Invalid parameter: {e}")
+        
+        # Parse constraints
+        constraints = UserConstraints(max_model_size_mb=max_model_size_mb) if max_model_size_mb else None
+        
+        # Run analysis
+        atlas = Atlas(sample_limit=sample_limit)
+        result = atlas.analyze(dataset_source, intent, output_dir, constraints)
+        
+        # Build response
+        response_data = {
+            "fingerprint": result['fingerprint'].to_dict(),
+            "decisions": result['decisions'].to_dict(),
+            "artifacts": {
+                name: str(path.name) for name, path in result['artifacts'].items()
+            }
+        }
+        
+        return JSONResponse(make_serializable_response(response_data))
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("v4_analyze failed: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if tempdir and tempdir.exists():
+            try:
+                shutil.rmtree(tempdir)
+            except Exception as e:
+                logger.warning("Failed to remove tempdir %s: %s", tempdir, e)
+
+
+@app.get("/v4/info", response_class=JSONResponse)
+def v4_info():
+    """Get v4 availability and capability information"""
+    if not V4_AVAILABLE:
+        return JSONResponse({
+            "available": False,
+            "message": "v4 modules not installed"
+        })
+    
+    return JSONResponse({
+        "available": True,
+        "version": "4.0.0",
+        "codename": "Atlas",
+        "features": [
+            "deterministic_fingerprinting",
+            "five_profile_system",
+            "rule_based_decisions",
+            "deployable_artifacts"
+        ],
+        "task_types": [t.value for t in TaskType],
+        "deployment_targets": [d.value for d in DeploymentTarget],
+        "priorities": [p.value for p in Priority],
+    })
+
+
 @app.get("/health", response_class=JSONResponse)
 def health():
-    return JSONResponse({"status": "healthy", "version": app.version})
+    return JSONResponse({
+        "status": "healthy", 
+        "version": app.version,
+        "v4_available": V4_AVAILABLE
+    })
 
 
 @app.post("/download_report", response_class=JSONResponse)

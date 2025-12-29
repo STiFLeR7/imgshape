@@ -1,4 +1,4 @@
-# setup.py — imgshape v3.0.0 (Aurora)
+# setup.py — imgshape v4.0.0 (Atlas)
 from setuptools import setup, find_packages
 
 # read long description
@@ -7,16 +7,16 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="imgshape",
-    version="3.0.0",
+    version="4.0.0",
     description=(
-        "imgshape — dataset intelligence for vision pipelines. "
-        "Analyze, recommend, visualize, and export augmentation & preprocessing pipelines "
-        "with Streamlit UI, plugin system, and lazy import architecture."
+        "imgshape v4.0.0 (Atlas) — Dataset intelligence layer: "
+        "deterministic fingerprinting and decision-making for ML pipelines. "
+        "FastAPI web service, plugin system, and Atlas orchestrator."
     ),
     long_description=long_description,
     long_description_content_type="text/markdown",
     author="Stifler",
-    author_email="stiflerxd.ai@cudabit.live",
+    author_email="hillaniljppatel@gmail.com",
     packages=find_packages(where="src"),
     package_dir={"": "src"},
     include_package_data=True,
@@ -25,7 +25,9 @@ setup(
         "numpy>=1.21.0",
         "matplotlib>=3.4.0",
         "scikit-image>=0.19.0",
-        "streamlit>=1.33.0",  # required for --web UI
+        "fastapi>=0.104.0",
+        "uvicorn[standard]>=0.24.0",
+        "pyyaml>=6.0",
     ],
     extras_require={
         # optional feature groups
@@ -35,6 +37,7 @@ setup(
         ],
         "pdf": ["weasyprint>=53.0", "reportlab>=3.6.0", "pyyaml>=6.0"],
         "viz": ["plotly>=5.20.0", "seaborn>=0.12.0"],
+        "web": ["fastapi>=0.104.0", "uvicorn[standard]>=0.24.0", "jinja2>=3.1.0"],
         "plugins": ["importlib-metadata>=6.0", "types-Pillow>=9.0"],
         "dev": [
             "pytest>=7.0",
@@ -45,7 +48,6 @@ setup(
             "build>=1.2",
             "twine>=4.0",
         ],
-        "ui": ["streamlit>=1.33.0", "pyyaml>=6.0"],
         "full": [
             "torch>=1.12.0",
             "torchvision>=0.13.0",
@@ -54,7 +56,9 @@ setup(
             "pyyaml>=6.0",
             "plotly>=5.20.0",
             "seaborn>=0.12.0",
-            "streamlit>=1.33.0",
+            "fastapi>=0.104.0",
+            "uvicorn[standard]>=0.24.0",
+            "jinja2>=3.1.0",
         ],
     },
     entry_points={
@@ -64,18 +68,24 @@ setup(
     },
     classifiers=[
         "Programming Language :: Python :: 3",
+        "Programming Language :: Python :: 3.8",
+        "Programming Language :: Python :: 3.9",
+        "Programming Language :: Python :: 3.10",
+        "Programming Language :: Python :: 3.11",
+        "Programming Language :: Python :: 3.12",
         "License :: OSI Approved :: MIT License",
         "Operating System :: OS Independent",
         "Topic :: Scientific/Engineering :: Image Recognition",
+        "Topic :: Scientific/Engineering :: Artificial Intelligence",
         "Intended Audience :: Science/Research",
         "Intended Audience :: Developers",
-        "Framework :: Streamlit",
+        "Framework :: FastAPI",
         "Development Status :: 5 - Production/Stable",
     ],
     python_requires=">=3.8",
     keywords=(
-        "image-analysis dataset-analytics computer-vision streamlit "
-        "augmentation preprocessing pytorch pipeline edge-ai visualization"
+        "image-analysis dataset-analytics computer-vision fastapi atlas "
+        "augmentation preprocessing pytorch pipeline fingerprinting decision-engine"
     ),
     url="https://github.com/STiFLeR7/imgshape",
     project_urls={
