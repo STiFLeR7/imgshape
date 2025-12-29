@@ -17,6 +17,7 @@ import logging
 import os
 import shutil
 import tempfile
+import uuid
 import zipfile
 import tarfile
 from pathlib import Path
@@ -50,8 +51,8 @@ try:
     from imgshape.decision_v4 import UserIntent, UserConstraints, TaskType, DeploymentTarget, Priority
     from imgshape.fingerprint_v4 import FingerprintExtractor
     V4_AVAILABLE = True
-except ImportError as e:
-    logger.warning(f"v4 modules not available: {e}")
+except ImportError:
+    # logger may not be initialized yet; set flag only
     V4_AVAILABLE = False
 
 __version__ = "4.0.0"
@@ -304,31 +305,14 @@ templates: Optional[Jinja2Templates] = None
 # Priority 1: Serve built React UI from ui/dist
 if ui_dist_dir.exists() and (ui_dist_dir / "index.html").exists():
     logger.info(f"Found React UI at {ui_dist_dir}, serving built app...")
-    app.mount("/static", StaticFiles(directory=str(ui_dist_dir)), name="static")
-    
+    # Serve assets under /assets to avoid catching API endpoints
+    assets_dir = ui_dist_dir / "assets"
+    if assets_dir.exists():
+        app.mount("/assets", StaticFiles(directory=str(assets_dir)), name="assets")
+
     @app.get("/", response_class=HTMLResponse)
     def ui_index_react(request: Request):
-        """Serve built React UI"""
-        index_html = (ui_dist_dir / "index.html").read_text(encoding="utf-8")
-        return index_html
-    
-    @app.get("/{path_name:path}", response_class=HTMLResponse)
-    def serve_react_assets(path_name: str):
-        """Serve React assets and fallback to index.html for client-side routing"""
-        file_path = ui_dist_dir / path_name
-        
-        # Security check
-        try:
-            file_path = file_path.resolve()
-            if not str(file_path).startswith(str(ui_dist_dir.resolve())):
-                raise HTTPException(status_code=403, detail="Access denied")
-        except Exception:
-            raise HTTPException(status_code=403, detail="Access denied")
-        
-        if file_path.exists() and file_path.is_file():
-            return FileResponse(str(file_path))
-        
-        # Fallback to index.html for React Router SPA
+        """Serve built React UI index only"""
         index_html = (ui_dist_dir / "index.html").read_text(encoding="utf-8")
         return index_html
 
@@ -399,6 +383,29 @@ def _safe_extract_zip(zip_path: Path, dest_dir: Path, max_files: int = MAX_EXTRA
                 shutil.copyfileobj(src, dst)
             extracted += 1
         return extracted
+
+
+def _collect_image_paths(root: Path, limit: int = 16) -> list[Path]:
+    exts = {".jpg", ".jpeg", ".png", ".bmp", ".tiff", ".webp"}
+    if root.is_file() and root.suffix.lower() in exts:
+        return [root]
+    found: list[Path] = []
+    for candidate in root.rglob("*"):
+        if candidate.suffix.lower() in exts:
+            found.append(candidate)
+            if len(found) >= limit:
+                break
+    return found
+
+
+def _coerce_bool(val: Optional[Any], default: bool) -> bool:
+    if val is None:
+        return default
+    if isinstance(val, bool):
+        return val
+    if isinstance(val, str):
+        return val.strip().lower() in {"1", "true", "yes", "on"}
+    return bool(val)
 
 
 def _safe_extract_tar(tar_path: Path, dest_dir: Path, max_files: int = MAX_EXTRACT_FILES) -> int:
@@ -612,40 +619,198 @@ async def recommend_image(
 @app.post("/augment", response_class=JSONResponse)
 async def get_augmentation_recommendations(
     dataset_path: Optional[str] = Form(None),
+    file: Optional[UploadFile] = File(None),
     dataset: Optional[UploadFile] = File(None),
+    num_to_generate: int = Form(4),
+    brightness: float = Form(0.5),
+    contrast: float = Form(0.5),
+    saturation: float = Form(0.5),
+    rotation: float = Form(15),
+    # UI flags (new) — optional to keep backward compatibility
+    color_jitter: Optional[bool] = Form(None),
+    rotate: Optional[bool] = Form(None),
+    blur: Optional[bool] = Form(None),
+    crop: Optional[bool] = Form(None),
+    # Legacy flags
+    enable_color_jitter: bool = Form(True),
+    enable_rotation: bool = Form(True),
+    enable_blur: bool = Form(False),
+    enable_crop: bool = Form(False),
 ):
-    """Get augmentation recommendations for a dataset"""
+    """Get augmentation recommendations and generate augmented images"""
     tempdir = None
     try:
-        from imgshape.augmentations import AugmentationRecommender
+        from imgshape.augmentations import AugmentationRecommender, Augmentation, AugmentationPlan
         from imgshape.analyze import analyze_dataset
+        try:
+            from torchvision import transforms
+        except Exception as e:
+            logger.warning("torchvision not available, falling back to identity transforms: %s", e)
+            transforms = None  # type: ignore
+        from PIL import ImageDraw
         
-        if dataset is not None:
-            # Handle uploaded dataset
-            contents = await dataset.read()
+        uploaded = dataset or file
+        if uploaded is not None:
+            # Handle uploaded file (single image or ZIP)
+            contents = await uploaded.read()
             tempdir = Path(tempfile.mkdtemp(prefix="imgshape_aug_"))
-            tmp_archive = tempdir / "dataset.zip"
-            tmp_archive.write_bytes(contents)
             
+            # Try to detect if it's a ZIP or a single image
             extracted_dir = tempdir / "extracted"
             extracted_dir.mkdir()
-            _safe_extract_zip(tmp_archive, extracted_dir)
-            target_path = str(extracted_dir)
+            
+            # Try as ZIP first
+            try:
+                tmp_archive = tempdir / "dataset.zip"
+                tmp_archive.write_bytes(contents)
+                _safe_extract_zip(tmp_archive, extracted_dir)
+                target_path = str(extracted_dir)
+            except Exception:
+                # If not a ZIP, treat as single image
+                try:
+                    img = Image.open(io.BytesIO(contents))
+                    img_path = extracted_dir / "image.png"
+                    img.save(str(img_path))
+                    target_path = str(extracted_dir)
+                except Exception as e:
+                    raise HTTPException(status_code=400, detail=f"Could not process uploaded file: {e}")
         elif dataset_path:
-            target_path = dataset_path
+            candidate = Path(dataset_path)
+            if not candidate.is_absolute():
+                candidate = DATASET_ROOT / candidate
+            candidate = candidate.resolve()
+            if not candidate.exists():
+                raise HTTPException(status_code=404, detail=f"Dataset not found: {dataset_path}")
+            if not _is_within_directory(DATASET_ROOT, candidate) and not str(candidate).startswith(str(DATASET_CACHE)):
+                raise HTTPException(status_code=403, detail="Access to provided dataset_path is forbidden")
+            target_path = str(candidate)
         else:
             raise HTTPException(status_code=400, detail="No dataset provided")
         
-        # Analyze dataset first
-        stats = analyze_dataset(target_path)
+        # Get base augmentation plan from recommender
+        try:
+            stats = analyze_dataset(target_path)
+        except Exception as e:
+            logger.warning(f"analyze_dataset failed: {e}, returning basic stats")
+            stats = {"image_count": 0, "error": str(e)}
         
-        # Get augmentation recommendations
-        recommender = AugmentationRecommender()
-        aug_plan = recommender.recommend_for_dataset(stats)
+        # Build custom augmentation list
+        augmentations = []
         
+        color_jitter_flag = color_jitter if color_jitter is not None else enable_color_jitter
+        rotate_flag = rotate if rotate is not None else enable_rotation
+        blur_flag = blur if blur is not None else enable_blur
+        crop_flag = crop if crop is not None else enable_crop
+
+        if color_jitter_flag:
+            augmentations.append(Augmentation(
+                name="ColorJitter",
+                params={
+                    "brightness": brightness,
+                    "contrast": contrast,
+                    "saturation": saturation,
+                    "hue": 0.05,
+                },
+                reason="User-selected color augmentation",
+                score=0.85,
+            ))
+        
+        if rotate_flag:
+            augmentations.append(Augmentation(
+                name="RandomRotation",
+                params={"degrees": rotation},
+                reason="User-selected rotation augmentation",
+                score=0.6,
+            ))
+        
+        if blur_flag:
+            augmentations.append(Augmentation(
+                name="GaussianBlur",
+                params={"kernel_size": 3, "sigma": (0.1, 2.0)},
+                reason="User-selected blur augmentation",
+                score=0.55,
+            ))
+        
+        if crop_flag:
+            augmentations.append(Augmentation(
+                name="RandomResizedCrop",
+                params={"size": 224, "scale": [0.8, 1.0]},
+                reason="User-selected crop augmentation",
+                score=0.65,
+            ))
+        
+        # If no augmentations selected, use recommended
+        if not augmentations:
+            try:
+                recommender = AugmentationRecommender()
+                aug_plan = recommender.recommend_for_dataset(stats)
+                augmentations = aug_plan.augmentations
+            except Exception as e:
+                logger.warning(f"AugmentationRecommender failed: {e}")
+                augmentations = []
+        
+        # Create augmentation plan
+        aug_plan = AugmentationPlan(
+            augmentations=augmentations,
+            recommended_order=[a.name for a in augmentations],
+            seed=42
+        )
+        
+        images: list[Dict[str, Any]] = []
+
+        try:
+            image_paths = _collect_image_paths(Path(target_path), limit=max(1, num_to_generate))
+        except Exception as e:
+            logger.warning("Image collection failed: %s", e)
+            image_paths = []
+
+        if not image_paths:
+            raise HTTPException(status_code=400, detail="No images found for augmentation")
+
+        # Build torchvision transforms pipeline for generation
+        transform_steps = []
+        if transforms is not None:
+            if color_jitter_flag:
+                transform_steps.append(transforms.ColorJitter(brightness=brightness, contrast=contrast, saturation=saturation, hue=0.05))
+            if rotate_flag:
+                transform_steps.append(transforms.RandomRotation(degrees=rotation))
+            if blur_flag:
+                transform_steps.append(transforms.GaussianBlur(kernel_size=3, sigma=(0.1, 2.0)))
+            if crop_flag:
+                transform_steps.append(transforms.RandomResizedCrop(size=224, scale=(0.8, 1.0)))
+
+        torch_pipeline = transforms.Compose(transform_steps) if transform_steps else None
+
+        for i in range(num_to_generate):
+            src = image_paths[i % len(image_paths)]
+            img = Image.open(str(src)).convert("RGB")
+            if torch_pipeline:
+                img = torch_pipeline(img)
+            buf = io.BytesIO()
+            img.save(buf, format="PNG")
+            images.append({
+                "base64": base64.b64encode(buf.getvalue()).decode("ascii"),
+                "label": f"augmented_{i+1}",
+            })
+
         result = {
-            "augmentations": aug_plan.to_dict() if hasattr(aug_plan, 'to_dict') else aug_plan,
-            "dataset_stats": stats
+            "augmentations": aug_plan.as_dict(),
+            "dataset_stats": stats,
+            "parameters": {
+                "num_to_generate": num_to_generate,
+                "brightness": brightness,
+                "contrast": contrast,
+                "saturation": saturation,
+                "rotation": rotation,
+                "enabled": {
+                    "color_jitter": color_jitter_flag,
+                    "rotation": rotate_flag,
+                    "blur": blur_flag,
+                    "crop": crop_flag,
+                }
+            },
+            "message": f"Augmentation plan with {len(augmentations)} transforms generated {len(images)} images",
+            "images": images,
         }
         
         return JSONResponse(make_serializable_response(result))
@@ -656,44 +821,116 @@ async def get_augmentation_recommendations(
 
 
 @app.post("/generate_report", response_class=JSONResponse)
-async def generate_report(
+async def generate_report_endpoint(
+    request: Request,
     dataset_path: Optional[str] = Form(None),
     dataset: Optional[UploadFile] = File(None),
-    format: str = Form("markdown"),
+    format: Optional[str] = Form(None),
+    include_metadata: Optional[bool] = Form(None),
+    include_charts: Optional[bool] = Form(None),
 ):
-    """Generate a dataset report (markdown/html)"""
+    """Generate a dataset report (markdown/html/pdf). Accepts JSON payloads (UI) or form-data (legacy)."""
     tempdir = None
+    analysis_results: Optional[Dict[str, Any]] = None
     try:
-        from imgshape.report import generate_markdown_report, markdown_to_html
+        from imgshape.report import generate_markdown_report, generate_html_report
         from imgshape.analyze import analyze_dataset
-        
+
+        payload: Dict[str, Any] = {}
+        if request.headers.get("content-type", "").lower().startswith("application/json"):
+            try:
+                payload = await request.json()
+            except Exception:
+                payload = {}
+
+        if payload:
+            dataset_path = payload.get("dataset_path") or dataset_path
+            analysis_results = payload.get("results")
+            format = payload.get("format") or format
+            include_metadata = payload.get("include_metadata") if "include_metadata" in payload else include_metadata
+            include_charts = payload.get("include_charts") if "include_charts" in payload else include_charts
+
+        fmt = (format or "markdown").lower()
+        include_metadata = _coerce_bool(include_metadata, True)
+        include_charts = _coerce_bool(include_charts, False)
+        report_id = uuid.uuid4().hex
+
+        target_path: Optional[str] = None
+        stats: Dict[str, Any] = {}
+
         if dataset is not None:
             contents = await dataset.read()
             tempdir = Path(tempfile.mkdtemp(prefix="imgshape_report_"))
-            tmp_archive = tempdir / "dataset.zip"
-            tmp_archive.write_bytes(contents)
-            
+
             extracted_dir = tempdir / "extracted"
             extracted_dir.mkdir()
-            _safe_extract_zip(tmp_archive, extracted_dir)
-            target_path = str(extracted_dir)
+
+            try:
+                tmp_archive = tempdir / "dataset.zip"
+                tmp_archive.write_bytes(contents)
+                _safe_extract_zip(tmp_archive, extracted_dir)
+                target_path = str(extracted_dir)
+            except Exception:
+                try:
+                    img = Image.open(io.BytesIO(contents))
+                    img_path = extracted_dir / "image.png"
+                    img.save(str(img_path))
+                    target_path = str(extracted_dir)
+                except Exception as e:
+                    raise HTTPException(status_code=400, detail=f"Could not process uploaded file: {e}")
         elif dataset_path:
-            target_path = dataset_path
+            candidate = Path(dataset_path)
+            if not candidate.is_absolute():
+                candidate = DATASET_ROOT / candidate
+            candidate = candidate.resolve()
+            if not candidate.exists():
+                raise HTTPException(status_code=404, detail=f"Dataset not found: {dataset_path}")
+            if not _is_within_directory(DATASET_ROOT, candidate) and not str(candidate).startswith(str(DATASET_CACHE)):
+                raise HTTPException(status_code=403, detail="Access to provided dataset_path is forbidden")
+            target_path = str(candidate)
+
+        if target_path:
+            try:
+                stats = analyze_dataset(target_path)
+            except Exception as e:
+                logger.warning("analyze_dataset failed: %s", e)
+                stats = {"image_count": 0, "error": str(e)}
+            analysis_results = analysis_results or stats
+        elif analysis_results is None:
+            raise HTTPException(status_code=400, detail="No dataset or analysis results provided")
+
+        # Generate report content
+        if fmt == "html":
+            try:
+                out_html = tempdir / "report.html" if tempdir else Path(tempfile.mktemp(suffix=".html"))
+                html_content = ""
+                if target_path:
+                    _ = generate_html_report(target_path, str(out_html), analysis=analysis_results)
+                    html_content = out_html.read_text(encoding="utf-8") if out_html.exists() else "<html><body>No report generated</body></html>"
+                else:
+                    html_content = f"<html><body><pre>{json.dumps(analysis_results, indent=2)}</pre></body></html>"
+                return JSONResponse({"id": report_id, "format": "html", "content": html_content})
+            except Exception as e:
+                logger.error("HTML report generation failed: %s", e)
+                return JSONResponse({"id": report_id, "format": "html", "content": f"<html><body>Error generating HTML report: {e}</body></html>"})
+        elif fmt == "pdf":
+            # Placeholder: PDF rendering not implemented; return HTML content and let client handle download
+            html_body = f"<html><body><pre>{json.dumps(analysis_results, indent=2)}</pre></body></html>"
+            return JSONResponse({"id": report_id, "format": "pdf", "content": html_body, "url": None})
         else:
-            raise HTTPException(status_code=400, detail="No dataset provided")
-        
-        # Analyze dataset
-        stats = analyze_dataset(target_path)
-        
-        # Generate markdown report
-        md_content = generate_markdown_report(stats, dataset_path=target_path)
-        
-        if format == "html":
-            html_content = markdown_to_html(md_content)
-            return JSONResponse({"format": "html", "content": html_content})
-        else:
-            return JSONResponse({"format": "markdown", "content": md_content})
-    
+            try:
+                md_content = ""
+                if target_path:
+                    out_md = tempdir / "report.md" if tempdir else Path(tempfile.mktemp(suffix=".md"))
+                    md_path = generate_markdown_report(target_path, str(out_md), analysis=analysis_results)
+                    md_content = Path(md_path).read_text(encoding="utf-8") if Path(md_path).exists() else "# Report\n\nNo report generated"
+                else:
+                    md_content = "# Report\n\n" + json.dumps({"include_metadata": include_metadata, "include_charts": include_charts, "results": analysis_results}, indent=2)
+                return JSONResponse({"id": report_id, "format": "markdown", "content": md_content})
+            except Exception as e:
+                logger.error("Markdown report generation failed: %s", e)
+                return JSONResponse({"id": report_id, "format": "markdown", "content": f"# Error\n\n{e}"})
+
     finally:
         if tempdir:
             shutil.rmtree(tempdir, ignore_errors=True)

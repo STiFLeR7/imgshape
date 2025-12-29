@@ -23,15 +23,38 @@ export interface V3Config {
   model: string;
 }
 
+export interface AugmentationConfig {
+  num_to_generate: number;
+  brightness: number;
+  contrast: number;
+  saturation: number;
+  rotation: number;
+  color_jitter: boolean;
+  rotate: boolean;
+  blur: boolean;
+  crop: boolean;
+}
+
+export interface ReportConfig {
+  format: 'markdown' | 'html' | 'pdf';
+  include_metadata: boolean;
+  include_charts: boolean;
+}
+
 export interface AppState {
   version: 'v3' | 'v4';
+  activeView: 'dashboard' | 'augmentation' | 'report';
   file: File | null;
   filePreviewUrl: string | null;
   datasetPath: string;
   v4Config: V4Config;
   v3Config: V3Config;
+  augmentationConfig: AugmentationConfig;
+  reportConfig: ReportConfig;
   status: 'idle' | 'loading' | 'success' | 'error';
   results: any | null;
+  augmentationResults: { images: Array<{ base64: string; label: string }> } | null;
+  reportResults: { id: string; content: string; url?: string } | null;
 }
 
 export interface HealthResponse {

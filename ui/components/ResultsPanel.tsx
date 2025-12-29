@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Code2, AlignLeft } from 'lucide-react';
+import { Code2, AlignLeft, FileText } from 'lucide-react';
 
 interface ResultsPanelProps {
   data: any | null;
@@ -7,7 +7,25 @@ interface ResultsPanelProps {
 }
 
 const ResultsPanel: React.FC<ResultsPanelProps> = ({ data, status }) => {
-  const [view, setView] = useState<'pretty' | 'raw'>('pretty');
+  const [view, setView] = useState<'pretty' | 'raw' | 'text'>('pretty');
+
+  const toText = (data: any, indent = 0): string => {
+    const spaces = ' '.repeat(indent);
+    if (typeof data !== 'object' || data === null) {
+      return String(data);
+    }
+    if (Array.isArray(data)) {
+      return data.map((item, i) => `${spaces}- [${i}]: ${toText(item, indent + 2).trim()}`).join('\n');
+    }
+    return Object.entries(data).map(([key, value]) => {
+        if (typeof value === 'object' && value !== null) {
+            // Check if it's empty
+            if (Object.keys(value).length === 0) return `${spaces}${key}: {}`;
+            return `${spaces}${key}:\n${toText(value, indent + 2)}`;
+        }
+        return `${spaces}${key}: ${value}`;
+    }).join('\n');
+  };
 
   const renderContent = () => {
     if (status === 'idle') {
@@ -41,6 +59,14 @@ const ResultsPanel: React.FC<ResultsPanelProps> = ({ data, status }) => {
       );
     }
 
+    if (view === 'text') {
+        return (
+            <pre className="p-4 text-xs font-mono text-gray-300 whitespace-pre-wrap break-all leading-5">
+              {toText(data)}
+            </pre>
+        );
+    }
+
     return (
       <div className="p-4 text-xs font-mono">
          <JsonTree data={data} />
@@ -68,6 +94,14 @@ const ResultsPanel: React.FC<ResultsPanelProps> = ({ data, status }) => {
             }`}
           >
             Raw
+          </button>
+          <button
+            onClick={() => setView('text')}
+            className={`px-3 py-1 rounded-md text-xs font-medium transition-all ${
+              view === 'text' ? 'bg-gray-700 text-white shadow-sm' : 'text-gray-400 hover:text-white'
+            }`}
+          >
+            Text
           </button>
         </div>
       </div>

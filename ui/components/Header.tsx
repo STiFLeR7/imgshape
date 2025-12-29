@@ -10,11 +10,17 @@ const Header: React.FC<HeaderProps> = ({ serverVersion, serverStatus }) => {
   return (
     <header className="h-16 flex items-center justify-between px-6 border-b border-gray-800 bg-surface/80 backdrop-blur-md sticky top-0 z-50">
       <div className="flex items-center space-x-4">
-        <img 
-          src="/imgshape.png" 
-          alt="imgshape logo" 
-          className="w-10 h-10 rounded-lg"
-        />
+        <div className="flex items-center gap-3">
+          {/* Logo replacement */}
+          <img src="imgshape.png" alt="imgshape logo" className="h-8 w-auto object-contain" onError={(e) => {
+             // Fallback if image fails to load
+             e.currentTarget.style.display = 'none';
+             e.currentTarget.nextElementSibling?.classList.remove('hidden');
+          }}/>
+          <div className="hidden p-2 bg-accent/20 rounded-lg">
+             <Layers className="w-6 h-6 text-accent" />
+          </div>
+        </div>
         <div>
           <h1 className="text-xl font-bold tracking-tight text-white flex items-center gap-2">
             imgshape 
@@ -35,7 +41,7 @@ const Header: React.FC<HeaderProps> = ({ serverVersion, serverStatus }) => {
                 {serverStatus ? 'System Online' : 'Disconnected'}
             </span>
         </div>
-        <a href="https://stifler7.github.io/imgshape/" target="_blank" rel="noopener noreferrer" className="flex items-center hover:text-white transition-colors">
+        <a href="https://github.com/STiFLeR7/imgshape/blob/master/README.md" target="_blank" rel="noopener noreferrer" className="flex items-center hover:text-white transition-colors">
           <FileText className="w-4 h-4 mr-2" />
           Docs
         </a>

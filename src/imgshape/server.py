@@ -224,7 +224,13 @@ def _list_profiles() -> List[str]:
 # -----------------------
 @app.get("/health")
 def health() -> Dict[str, Any]:
-    return {"status": "ok", "version": "0.1", "plugins_dir": str(PLUGINS_DIR), "profiles_dir": str(PROFILES_DIR)}
+    return {
+        "status": "healthy",
+        "version": app.version if hasattr(app, "version") else "0.1",
+        "v4_available": False,
+        "plugins_dir": str(PLUGINS_DIR),
+        "profiles_dir": str(PROFILES_DIR),
+    }
 
 
 @app.post("/analyze")

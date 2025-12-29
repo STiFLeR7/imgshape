@@ -250,11 +250,11 @@ def main() -> None:
             print("   uvicorn service.app:app --reload")
             sys.exit(1)
 
-        print(f"🚀 Launching FastAPI service at: {service_path}")
-        print("   Open browser at: http://localhost:8000")
+        print(f"Launching FastAPI service at: {service_path}")
+        print("   Open browser at: http://127.0.0.1:8080")
         try:
             subprocess.run(
-                ["uvicorn", "service.app:app", "--reload"],
+                ["uvicorn", "service.app:app", "--reload", "--host", "127.0.0.1", "--port", "8080"],
                 check=True,
                 cwd=str(service_path.parent.parent)
             )

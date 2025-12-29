@@ -1,4 +1,4 @@
-import { V4Config, V3Config } from '../types';
+import { V4Config, V3Config, AugmentationConfig, ReportConfig } from '../types';
 
 const BASE_URL = 'http://localhost:8000';
 
@@ -59,6 +59,49 @@ class ApiService {
     if (!response.ok) {
         const errorText = await response.text();
         throw new Error(`Analysis failed: ${response.status} - ${errorText}`);
+    }
+    return await response.json();
+  }
+
+  // Augmentation
+  async augment(file: File | null, datasetPath: string, config: AugmentationConfig) {
+    const formData = new FormData();
+    if (file) formData.append('file', file);
+    if (datasetPath) formData.append('dataset_path', datasetPath);
+
+    // Append config parameters
+    Object.entries(config).forEach(([key, value]) => {
+      formData.append(key, value.toString());
+    });
+
+    const response = await fetch(`${BASE_URL}/augment`, {
+      method: 'POST',
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Augmentation failed: ${response.status} - ${errorText}`);
+    }
+    return await response.json();
+  }
+
+  // Report Generation
+  async generateReport(analysisResults: any, config: ReportConfig) {
+    const response = await fetch(`${BASE_URL}/generate_report`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        results: analysisResults,
+        ...config
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Report generation failed: ${response.status} - ${errorText}`);
     }
     return await response.json();
   }
