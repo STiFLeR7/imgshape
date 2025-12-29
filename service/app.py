@@ -202,6 +202,97 @@ def make_serializable_response(obj: Any) -> Any:
         return {"error": "serialization_failed", "detail": str(e), "repr": str(obj)}
 
 
+def format_decision_pretty(decision: Dict[str, Any]) -> str:
+    """Format a single decision into human-readable text"""
+    lines = []
+    lines.append(f"✓ {decision.get('selected', 'N/A')}")
+    lines.append(f"  Confidence: {decision.get('confidence', 0):.2%}")
+    
+    why = decision.get('why', [])
+    if why:
+        lines.append("  Reasoning:")
+        for i, reason in enumerate(why, 1):
+            lines.append(f"    {i}. {reason}")
+    
+    alternatives = decision.get('alternatives', [])
+    if alternatives:
+        lines.append(f"  Alternatives: {', '.join(alternatives)}")
+    
+    return "\n".join(lines)
+
+
+def format_fingerprint_pretty(fingerprint: Dict[str, Any]) -> str:
+    """Format fingerprint into human-readable text"""
+    lines = []
+    lines.append("=== Dataset Fingerprint ===\n")
+    lines.append(f"URI: {fingerprint.get('dataset_uri', 'N/A')}")
+    lines.append(f"ID: {fingerprint.get('dataset_id', 'N/A')[:16]}...")
+    lines.append(f"Samples: {fingerprint.get('sample_count', 0):,}\n")
+    
+    profiles = fingerprint.get('profiles', {})
+    
+    if 'spatial' in profiles:
+        spatial = profiles['spatial']
+        lines.append("📐 Spatial Profile:")
+        lines.append(f"  Resolution: {spatial.get('resolution_range', {}).get('median', 'N/A')}")
+        lines.append(f"  Aspect Ratio Variance: {spatial.get('aspect_ratio_variance', 0):.3f}")
+        lines.append("")
+    
+    if 'signal' in profiles:
+        signal = profiles['signal']
+        lines.append("🔌 Signal Profile:")
+        lines.append(f"  Channels: {signal.get('channel_count', 'N/A')}")
+        lines.append(f"  Bit Depth: {signal.get('bit_depth', 'N/A')}")
+        lines.append("")
+    
+    if 'distribution' in profiles:
+        dist = profiles['distribution']
+        lines.append("📊 Distribution Profile:")
+        lines.append(f"  Entropy: {dist.get('entropy', 0):.2f}")
+        lines.append(f"  Color Uniformity: {dist.get('color_uniformity', 0):.3f}")
+        lines.append("")
+    
+    if 'quality' in profiles:
+        quality = profiles['quality']
+        lines.append("✓ Quality Profile:")
+        lines.append(f"  Corruption Rate: {quality.get('corruption_rate', 0):.1%}")
+        lines.append(f"  Blur: {quality.get('blur_percentage', 0):.1%}")
+        lines.append("")
+    
+    if 'semantic' in profiles:
+        semantic = profiles['semantic']
+        lines.append("🧠 Semantic Profile:")
+        lines.append(f"  Type: {semantic.get('inferred_type', 'N/A')}")
+        lines.append(f"  Confidence: {semantic.get('confidence', 0):.2%}")
+    
+    return "\n".join(lines)
+
+
+def format_analysis_pretty(data: Dict[str, Any]) -> str:
+    """Format complete analysis into human-readable text"""
+    lines = []
+    
+    if 'fingerprint' in data:
+        lines.append(format_fingerprint_pretty(data['fingerprint']))
+        lines.append("\n" + "="*50 + "\n")
+    
+    if 'decisions' in data:
+        decisions = data['decisions']
+        lines.append("=== Decisions ===\n")
+        
+        for domain, decision in decisions.items():
+            if isinstance(decision, dict):
+                lines.append(f"\n{domain.replace('_', ' ').title()}:")
+                lines.append(format_decision_pretty(decision))
+    
+    if 'artifacts' in data:
+        lines.append("\n\n=== Generated Artifacts ===")
+        for name, path in data['artifacts'].items():
+            lines.append(f"  • {name}: {path}")
+    
+    return "\n".join(lines)
+
+
 # --------------------- optional UI mounting ---------------------
 # Try to serve built React UI from ui/dist first, fallback to templates/static
 ui_dist_dir = BASE_DIR.parent / "ui" / "dist"
@@ -518,6 +609,96 @@ async def recommend_image(
         raise HTTPException(status_code=400, detail=str(e))
 
 
+@app.post("/augment", response_class=JSONResponse)
+async def get_augmentation_recommendations(
+    dataset_path: Optional[str] = Form(None),
+    dataset: Optional[UploadFile] = File(None),
+):
+    """Get augmentation recommendations for a dataset"""
+    tempdir = None
+    try:
+        from imgshape.augmentations import AugmentationRecommender
+        from imgshape.analyze import analyze_dataset
+        
+        if dataset is not None:
+            # Handle uploaded dataset
+            contents = await dataset.read()
+            tempdir = Path(tempfile.mkdtemp(prefix="imgshape_aug_"))
+            tmp_archive = tempdir / "dataset.zip"
+            tmp_archive.write_bytes(contents)
+            
+            extracted_dir = tempdir / "extracted"
+            extracted_dir.mkdir()
+            _safe_extract_zip(tmp_archive, extracted_dir)
+            target_path = str(extracted_dir)
+        elif dataset_path:
+            target_path = dataset_path
+        else:
+            raise HTTPException(status_code=400, detail="No dataset provided")
+        
+        # Analyze dataset first
+        stats = analyze_dataset(target_path)
+        
+        # Get augmentation recommendations
+        recommender = AugmentationRecommender()
+        aug_plan = recommender.recommend_for_dataset(stats)
+        
+        result = {
+            "augmentations": aug_plan.to_dict() if hasattr(aug_plan, 'to_dict') else aug_plan,
+            "dataset_stats": stats
+        }
+        
+        return JSONResponse(make_serializable_response(result))
+    
+    finally:
+        if tempdir:
+            shutil.rmtree(tempdir, ignore_errors=True)
+
+
+@app.post("/generate_report", response_class=JSONResponse)
+async def generate_report(
+    dataset_path: Optional[str] = Form(None),
+    dataset: Optional[UploadFile] = File(None),
+    format: str = Form("markdown"),
+):
+    """Generate a dataset report (markdown/html)"""
+    tempdir = None
+    try:
+        from imgshape.report import generate_markdown_report, markdown_to_html
+        from imgshape.analyze import analyze_dataset
+        
+        if dataset is not None:
+            contents = await dataset.read()
+            tempdir = Path(tempfile.mkdtemp(prefix="imgshape_report_"))
+            tmp_archive = tempdir / "dataset.zip"
+            tmp_archive.write_bytes(contents)
+            
+            extracted_dir = tempdir / "extracted"
+            extracted_dir.mkdir()
+            _safe_extract_zip(tmp_archive, extracted_dir)
+            target_path = str(extracted_dir)
+        elif dataset_path:
+            target_path = dataset_path
+        else:
+            raise HTTPException(status_code=400, detail="No dataset provided")
+        
+        # Analyze dataset
+        stats = analyze_dataset(target_path)
+        
+        # Generate markdown report
+        md_content = generate_markdown_report(stats, dataset_path=target_path)
+        
+        if format == "html":
+            html_content = markdown_to_html(md_content)
+            return JSONResponse({"format": "html", "content": html_content})
+        else:
+            return JSONResponse({"format": "markdown", "content": md_content})
+    
+    finally:
+        if tempdir:
+            shutil.rmtree(tempdir, ignore_errors=True)
+
+
 @app.get("/datasets", response_class=JSONResponse)
 def list_datasets():
     local = []
@@ -607,10 +788,13 @@ async def v4_fingerprint(
     file: Optional[UploadFile] = File(None),
     dataset_path: Optional[str] = Form(None),
     sample_limit: Optional[int] = Form(None),
+    format: str = Form("json"),  # "json" or "pretty"
 ):
     """
     Extract v4 dataset fingerprint from uploaded file or server path.
     Returns canonical dataset identity with 5 profiles.
+    
+    format: "json" for structured data, "pretty" for human-readable text
     """
     if not V4_AVAILABLE:
         raise HTTPException(status_code=503, detail="v4 modules not available")
@@ -638,7 +822,12 @@ async def v4_fingerprint(
         # Convert to serializable format
         result = fingerprint.to_dict()
         
-        return JSONResponse(make_serializable_response(result))
+        # Format output based on request
+        if format == "pretty":
+            pretty_text = format_fingerprint_pretty(result)
+            return JSONResponse({"format": "pretty", "text": pretty_text, "data": make_serializable_response(result)})
+        else:
+            return JSONResponse(make_serializable_response(result))
         
     except HTTPException:
         raise
@@ -662,10 +851,13 @@ async def v4_analyze(
     priority: str = Form("balanced"),
     sample_limit: Optional[int] = Form(None),
     max_model_size_mb: Optional[float] = Form(None),
+    format: str = Form("json"),  # "json" or "pretty"
 ):
     """
     Complete v4 Atlas analysis: fingerprint + decisions + artifacts.
     Returns fingerprint, decisions, and generates artifacts in temp directory.
+    
+    format: "json" for structured data, "pretty" for human-readable text
     """
     if not V4_AVAILABLE:
         raise HTTPException(status_code=503, detail="v4 modules not available")
@@ -694,11 +886,11 @@ async def v4_analyze(
         # Parse user intent
         try:
             intent = UserIntent(
-                task=TaskType[task.upper()],
-                deployment_target=DeploymentTarget[deployment.upper()],
-                priority=Priority[priority.upper()]
+                task=TaskType(task),
+                deployment_target=DeploymentTarget(deployment),
+                priority=Priority(priority)
             )
-        except KeyError as e:
+        except (KeyError, ValueError) as e:
             raise HTTPException(status_code=400, detail=f"Invalid parameter: {e}")
         
         # Parse constraints
@@ -717,7 +909,12 @@ async def v4_analyze(
             }
         }
         
-        return JSONResponse(make_serializable_response(response_data))
+        # Format output based on request
+        if format == "pretty":
+            pretty_text = format_analysis_pretty(response_data)
+            return JSONResponse({"format": "pretty", "text": pretty_text, "data": make_serializable_response(response_data)})
+        else:
+            return JSONResponse(make_serializable_response(response_data))
         
     except HTTPException:
         raise

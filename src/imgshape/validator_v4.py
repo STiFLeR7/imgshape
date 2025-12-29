@@ -45,8 +45,8 @@ class SchemaValidator:
             schemas_dir: Directory containing schema files (defaults to package schemas/)
         """
         if schemas_dir is None:
-            # Default to package schemas directory
-            schemas_dir = Path(__file__).parent.parent / "schemas"
+            # Default to package schemas directory (imgshape/schemas/)
+            schemas_dir = Path(__file__).parent / "schemas"
         
         self.schemas_dir = schemas_dir
         self._schemas_cache: Dict[SchemaType, Dict] = {}

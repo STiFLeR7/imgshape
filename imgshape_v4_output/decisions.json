@@ -1,0 +1,169 @@
+{
+  "schema_version": "4.0",
+  "fingerprint_id": "imgshape://vision/photographic/high_entropy",
+  "decisions": {
+    "model_family": {
+      "decision_id": "model_family",
+      "selected": "EfficientNetB7",
+      "why": [
+        "Very high complexity dataset requires maximum capacity"
+      ],
+      "risks": [
+        {
+          "severity": "high",
+          "description": "Very high computational cost",
+          "mitigation": "Consider progressive training or model pruning"
+        }
+      ],
+      "tradeoffs": [],
+      "alternatives_considered": [],
+      "confidence": 0.9,
+      "dependencies": [],
+      "metadata": {
+        "rule_version": "4.0.0",
+        "fingerprint_inputs": [
+          "signal.capacity_ceiling",
+          "semantic.primary_domain"
+        ]
+      }
+    },
+    "input_resolution": {
+      "decision_id": "input_resolution",
+      "selected": {
+        "width": 2512,
+        "height": 2012
+      },
+      "why": [
+        "High resize risk detected - using median native resolution",
+        "Aspect ratio variance: 0.028"
+      ],
+      "risks": [
+        {
+          "severity": "medium",
+          "description": "Variable input sizes increase training complexity",
+          "mitigation": null
+        }
+      ],
+      "tradeoffs": [],
+      "alternatives_considered": [],
+      "confidence": null,
+      "dependencies": [],
+      "metadata": {
+        "rule_version": "4.0.0",
+        "fingerprint_inputs": [
+          "spatial.resize_risk",
+          "spatial.resolution_range"
+        ]
+      }
+    },
+    "augmentation_strategy": {
+      "decision_id": "augmentation_strategy",
+      "selected": "standard",
+      "why": [
+        "Clean dataset permits standard augmentation suite"
+      ],
+      "risks": [],
+      "tradeoffs": [],
+      "alternatives_considered": [],
+      "confidence": null,
+      "dependencies": [],
+      "metadata": {
+        "rule_version": "4.0.0",
+        "fingerprint_inputs": [
+          "signal.noise_estimate",
+          "semantic.primary_domain"
+        ]
+      }
+    },
+    "regularization": {
+      "decision_id": "regularization",
+      "selected": {
+        "dropout": 0.2,
+        "weight_decay": 1e-05
+      },
+      "why": [
+        "Lightweight models need moderate regularization"
+      ],
+      "risks": [],
+      "tradeoffs": [],
+      "alternatives_considered": [],
+      "confidence": null,
+      "dependencies": [],
+      "metadata": {
+        "rule_version": "4.0.0"
+      }
+    },
+    "quantization": {
+      "decision_id": "quantization",
+      "selected": "none",
+      "why": [
+        "Cloud deployment doesn't require quantization"
+      ],
+      "risks": [],
+      "tradeoffs": [],
+      "alternatives_considered": [],
+      "confidence": null,
+      "dependencies": [],
+      "metadata": {
+        "rule_version": "4.0.0"
+      }
+    },
+    "preprocessing": {
+      "decision_id": "preprocessing",
+      "selected": [
+        "resize",
+        "normalize"
+      ],
+      "why": [
+        "Standard preprocessing: resize and normalize"
+      ],
+      "risks": [],
+      "tradeoffs": [],
+      "alternatives_considered": [],
+      "confidence": null,
+      "dependencies": [],
+      "metadata": {
+        "rule_version": "4.0.0"
+      }
+    },
+    "loss_function": {
+      "decision_id": "loss_function",
+      "selected": "cross_entropy",
+      "why": [
+        "Distribution profile recommends cross_entropy"
+      ],
+      "risks": [],
+      "tradeoffs": [],
+      "alternatives_considered": [],
+      "confidence": null,
+      "dependencies": [],
+      "metadata": {
+        "rule_version": "4.0.0"
+      }
+    },
+    "sampling_strategy": {
+      "decision_id": "sampling_strategy",
+      "selected": "uniform",
+      "why": [
+        "Distribution analysis indicates uniform sampling"
+      ],
+      "risks": [],
+      "tradeoffs": [],
+      "alternatives_considered": [],
+      "confidence": null,
+      "dependencies": [],
+      "metadata": {
+        "rule_version": "4.0.0"
+      }
+    }
+  },
+  "metadata": {
+    "rule_engine_version": "4.0.0",
+    "user_intent": {
+      "task": "classification",
+      "deployment_target": "cloud",
+      "priority": "balanced"
+    },
+    "constraints": {}
+  }
+}

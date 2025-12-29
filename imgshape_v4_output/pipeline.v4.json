@@ -1,0 +1,76 @@
+{
+  "schema_version": "4.0",
+  "pipeline_id": "pipeline_20251229_125120",
+  "source_fingerprint": "imgshape://vision/photographic/high_entropy",
+  "stages": [
+    {
+      "stage_id": "preproc_0",
+      "operation": "resize",
+      "parameters": {
+        "width": 2512,
+        "height": 2012
+      },
+      "rationale": "From preprocessing decision: resize"
+    },
+    {
+      "stage_id": "preproc_1",
+      "operation": "normalize",
+      "parameters": {
+        "mean": [
+          0.485,
+          0.456,
+          0.406
+        ],
+        "std": [
+          0.229,
+          0.224,
+          0.225
+        ]
+      },
+      "rationale": "From preprocessing decision: normalize"
+    },
+    {
+      "stage_id": "augmentation",
+      "operation": "augment",
+      "parameters": {
+        "strategy": "standard",
+        "strength": 0.6
+      },
+      "rationale": "Clean dataset permits standard augmentation suite"
+    }
+  ],
+  "model_recommendation": {
+    "family": "EfficientNetB7",
+    "architecture": "EfficientNetB7",
+    "pretrained": true,
+    "input_shape": [
+      2012,
+      2512,
+      3
+    ]
+  },
+  "training_hints": {
+    "regularization": {
+      "dropout": 0.2,
+      "weight_decay": 1e-05
+    },
+    "recommended_batch_size": 32,
+    "learning_rate_range": {
+      "min": 0.0001,
+      "max": 0.01
+    },
+    "epochs_estimate": {
+      "min": 20,
+      "max": 100
+    }
+  },
+  "metadata": {
+    "generated_at": "2025-12-29T12:51:20.673560",
+    "imgshape_version": "4.0.0",
+    "deterministic": true,
+    "framework_targets": [
+      "pytorch",
+      "tensorflow"
+    ]
+  }
+}

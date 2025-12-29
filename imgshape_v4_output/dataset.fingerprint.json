@@ -1,0 +1,67 @@
+{
+  "schema_version": "4.0",
+  "dataset_uri": "imgshape://vision/photographic/high_entropy",
+  "profiles": {
+    "spatial": {
+      "resolution_range": {
+        "min": {
+          "width": 1024,
+          "height": 1024
+        },
+        "max": {
+          "width": 4000,
+          "height": 3000
+        },
+        "median": {
+          "width": 2512,
+          "height": 2012
+        }
+      },
+      "aspect_ratio_variance": 0.02777777777777777,
+      "resize_risk": "high",
+      "geometry_class": "diverse"
+    },
+    "signal": {
+      "entropy": {
+        "mean": 10.981506152535644,
+        "std": 0.6169125309566619,
+        "range": {
+          "min": 10.364593621578983,
+          "max": 11.598418683492307
+        }
+      },
+      "noise_estimate": 0.24984290262320946,
+      "capacity_ceiling": "unlimited",
+      "information_density": "very_dense"
+    },
+    "distribution": {
+      "class_balance": {
+        "type": "unknown",
+        "imbalance_ratio": 1.0,
+        "class_count": 0
+      },
+      "sampling_strategy": "uniform",
+      "loss_recommendation": "cross_entropy"
+    },
+    "quality": {
+      "overall_quality": "excellent",
+      "warnings": [],
+      "corruption_rate": 0.0,
+      "duplication_rate": 0.0
+    },
+    "semantic": {
+      "primary_domain": "photographic",
+      "content_type": "high_entropy",
+      "characteristics": [
+        "color"
+      ],
+      "specialization_required": false
+    }
+  },
+  "derived_class": "vision.photographic.high_entropy",
+  "confidence": 0.9,
+  "metadata": {
+    "sample_count": 4,
+    "imgshape_version": "4.0.0"
+  }
+}
