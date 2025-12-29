@@ -107,12 +107,26 @@ def cli_args() -> argparse.Namespace:
 def main() -> None:
     args = cli_args()
     
-    # Handle deprecated --intent parameter
+    # Handle deprecated --intent parameter gracefully (no failure)
     if hasattr(args, '_deprecated_intent') and args._deprecated_intent:
-        print("Warning: --intent is deprecated. Use --task instead.")
-        print(f"    Example: --task {args._deprecated_intent}")
-        print(f"    Available tasks: classification, detection, segmentation, generation, other")
-        sys.exit(2)
+        legacy = (args._deprecated_intent or '').strip().lower()
+        synonyms = {
+            'train': 'classification',
+            'training': 'classification',
+            'classify': 'classification',
+            'classification': 'classification',
+            'detect': 'detection',
+            'detection': 'detection',
+            'segment': 'segmentation',
+            'segmentation': 'segmentation',
+            'generate': 'generation',
+            'generation': 'generation',
+        }
+        mapped = synonyms.get(legacy, 'other')
+        print("Warning: --intent is deprecated. Mapping to --task.")
+        print(f"    Provided: --intent {legacy}  →  Using: --task {mapped}")
+        print("    Available tasks: classification, detection, segmentation, generation, other")
+        args.task = mapped
 
     if args.verbose:
         print("Running imgshape CLI in verbose mode")
