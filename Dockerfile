@@ -21,6 +21,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libxrender-dev \
     ca-certificates \
     curl \
+    nano \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -51,6 +52,5 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
 # Expose port for Cloud Run (uses $PORT)
 EXPOSE 8080
 
-# Run FastAPI with imgshape CLI (which handles service startup)
-# Or directly use uvicorn for better Cloud Run compatibility
-CMD ["sh", "-c", "uvicorn service.app:app --host 0.0.0.0 --port ${PORT:-8080} --timeout-keep-alive 120 --access-log"]
+# Run FastAPI with proper PORT env var expansion (shell form, not JSON array)
+CMD exec uvicorn service.app:app --host 0.0.0.0 --port ${PORT:-8080} --timeout-keep-alive 120 --access-log

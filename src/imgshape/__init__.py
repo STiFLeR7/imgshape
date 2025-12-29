@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 # src/imgshape/__init__.py
 """
 imgshape package public API (v2.2.0 -> v3.0.0 -> v4.0.0) — lazy exports + safe optional telemetry.
@@ -10,8 +12,6 @@ Behavior:
 - v3 additions: pipeline, recommender & plugin helpers exposed lazily.
 - v4 additions: Atlas, fingerprinting, and decision engine exposed directly.
 """
-
-from __future__ import annotations
 
 import importlib
 from importlib import metadata
