@@ -75,12 +75,15 @@ def cli_args() -> argparse.Namespace:
     
     # v4 intent parameters
     p.add_argument("--task", type=str, choices=["classification", "detection", "segmentation", "generation", "other"], 
-                   default="classification", help="Task type (v4)")
+                   default="classification", help="Task type: classification, detection, segmentation, generation, other")
     p.add_argument("--deployment", type=str, choices=["cloud", "edge", "mobile", "embedded", "other"], 
-                   default="cloud", help="Deployment target (v4)")
+                   default="cloud", help="Deployment target: cloud, edge, mobile, embedded, other")
     p.add_argument("--priority", type=str, choices=["accuracy", "speed", "size", "balanced"], 
-                   default="balanced", help="Optimization priority (v4)")
-    p.add_argument("--max-model-size", type=int, help="Max model size in MB (v4)")
+                   default="balanced", help="Optimization priority: accuracy, speed, size, balanced")
+    p.add_argument("--max-model-size", type=int, help="Max model size in MB")
+    
+    # Deprecated aliases (for backward compatibility)
+    p.add_argument("--intent", type=str, dest="_deprecated_intent", help=argparse.SUPPRESS)
 
     # Visualization and report
     p.add_argument("--viz", type=str, help="Plot dataset shape distribution")
@@ -103,9 +106,16 @@ def cli_args() -> argparse.Namespace:
 # ----------------------------
 def main() -> None:
     args = cli_args()
+    
+    # Handle deprecated --intent parameter
+    if hasattr(args, '_deprecated_intent') and args._deprecated_intent:
+        print("Warning: --intent is deprecated. Use --task instead.")
+        print(f"    Example: --task {args._deprecated_intent}")
+        print(f"    Available tasks: classification, detection, segmentation, generation, other")
+        sys.exit(2)
 
     if args.verbose:
-        print("🔍 Running imgshape CLI in verbose mode")
+        print("Running imgshape CLI in verbose mode")
 
     # Single image shape
     if args.shape and args.path:
@@ -163,28 +173,44 @@ def main() -> None:
 
     # --- v4 Atlas commands ---
     if args.atlas and args.path and V4_AVAILABLE:
-        print(f"\n🗺️ Running Atlas v4 analysis: {args.path}")
+        print(f"\nRunning Atlas v4 analysis: {args.path}")
         try:
             from imgshape.decision_v4 import UserIntent, TaskType, DeploymentTarget, Priority
             
             intent = UserIntent(
-                task=TaskType(args.task.upper()),
-                deployment_target=DeploymentTarget(args.deployment.upper()),
-                priority=Priority(args.priority.upper()),
+                task=TaskType(args.task),
+                deployment_target=DeploymentTarget(args.deployment),
+                priority=Priority(args.priority),
             )
             
             result = analyze_dataset_v4(args.path, user_intent=intent)
-            result_dict = result if isinstance(result, dict) else (result.to_dict() if hasattr(result, 'to_dict') else result)
+            
+            # Convert to dict for JSON serialization
+            if isinstance(result, dict):
+                artifacts_dict = {}
+                if "artifacts" in result and isinstance(result["artifacts"], dict):
+                    # Convert Path objects to strings
+                    for key, value in result["artifacts"].items():
+                        artifacts_dict[key] = str(value) if hasattr(value, '__fspath__') else value
+                
+                result_dict = {
+                    "fingerprint": result["fingerprint"].to_dict() if hasattr(result["fingerprint"], "to_dict") else result["fingerprint"],
+                    "decisions": result["decisions"].to_dict() if hasattr(result["decisions"], "to_dict") else result["decisions"],
+                    "artifacts": artifacts_dict
+                }
+            else:
+                result_dict = result.to_dict() if hasattr(result, 'to_dict') else result
             
             if args.out:
                 out_path = Path(args.out)
+                out_path.parent.mkdir(parents=True, exist_ok=True)
                 out_path.write_text(json.dumps(result_dict, indent=2), encoding="utf-8")
-                print(f"✅ Saved Atlas result to: {out_path}")
+                print(f"Saved Atlas result to: {out_path}")
             else:
                 print(json.dumps(result_dict, indent=2))
                 
         except Exception as e:
-            print(f"❌ Atlas analysis failed: {e}")
+            print(f"Atlas analysis failed: {e}")
             if args.verbose:
                 import traceback
                 traceback.print_exc()
