@@ -18,7 +18,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ["3.11", "3.12"]
+        python-version: ["3.12"]
       fail-fast: false
 
     env:
@@ -174,27 +174,28 @@ jobs:
 
       - name: Collect logs & reports (always)
         if: always()
+        shell: bash
         run: |
           mkdir -p tmp
           if [ ! -f pytest-report.xml ]; then
             echo "<testsuites/>" > pytest-report.xml
           fi
-          ls -la tmp || true
+          ls -la dist/ || true
+          ls -la tmp/ || true
+          echo "Files ready for upload:"
+          find dist/ tmp/ -type f 2>/dev/null | head -20 || true
 
       - name: Upload artifacts (test logs + distributions)
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: ci-artifacts
+          name: ci-artifacts-py${{ matrix.python-version }}
           path: |
-            dist/**
-            build/**
-            tmp/**
-            imgshape_report.*
+            dist/
+            tmp/
             pytest-report.xml
-            tmp/ci_report.*
-            tmp/ci_shape_plot.html
-            tmp/transform_snippet.py
+          retention-days: 30
+          if-no-files-found: warn
 
       - name: Cleanup (best-effort)
         if: always()
