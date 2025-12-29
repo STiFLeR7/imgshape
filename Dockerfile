@@ -41,16 +41,18 @@ RUN python -m pip install --upgrade pip setuptools wheel
 
 # Install Python dependencies
 RUN if [ -f requirements.txt ]; then \
-    pip install --no-cache-dir -r requirements.txt || true; \
+    pip install --no-cache-dir -r requirements.txt; \
     fi && \
-    pip install --no-cache-dir --upgrade .
-
-# Health check endpoint
-HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-    CMD curl -f http://localhost:8080/health || exit 1
+    pip install --no-cache-dir --upgrade . && \
+    pip install --no-cache-dir uvicorn[standard]
 
 # Expose port for Cloud Run (uses $PORT)
 EXPOSE 8080
 
 # Run FastAPI with proper PORT env var expansion (shell form, not JSON array)
-CMD exec uvicorn service.app:app --host 0.0.0.0 --port ${PORT:-8080} --timeout-keep-alive 120 --access-log
+CMD echo "Starting uvicorn on 0.0.0.0:${PORT:-8080}" && \
+    exec uvicorn service.app:app \
+    --host 0.0.0.0 \
+    --port ${PORT:-8080} \
+    --timeout-keep-alive 120 \
+    --log-level info
