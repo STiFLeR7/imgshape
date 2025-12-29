@@ -21,7 +21,7 @@
 **Deterministic Dataset Fingerprinting & Intelligent Decision Making**<br/>
 *Fingerprinting • Rule-Based Decisions • Explainable AI • Deployable Artifacts • Production Ready*
 
-[**Documentation**](https://stifler7.github.io/imgshape) • [**v4 Guide**](#-imgshape-v400-atlas) • [**Report Bug**](https://github.com/STiFLeR7/imgshape/issues) • [**Request Feature**](https://github.com/STiFLeR7/imgshape/issues)
+[🌐 **Live Demo**](https://imgshape.vercel.app/) • [**Documentation**](https://stifler7.github.io/imgshape) • [**v4 Guide**](#-imgshape-v400-atlas) • [**Report Bug**](https://github.com/STiFLeR7/imgshape/issues) • [**Request Feature**](https://github.com/STiFLeR7/imgshape/issues)
 
 </div>
 
@@ -113,6 +113,8 @@ imgshape --web
 
 The **imgshape web UI** provides an interactive, modern interface for dataset analysis:
 
+**Live Demo:** 🌐 [imgshape.vercel.app](https://imgshape.vercel.app/)
+
 ```bash
 imgshape --web
 ```
@@ -123,6 +125,8 @@ imgshape --web
 - 📈 Dataset statistics dashboard
 - 💾 Export analysis results (JSON, YAML, PDF)
 - 🚀 Deploy artifacts directly from the UI
+
+![Dashboard UI](assets/dashboard.png)
 
 ---
 
