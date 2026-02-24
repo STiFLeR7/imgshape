@@ -1,4 +1,4 @@
-# setup.py — imgshape v4.0.0 (Atlas)
+# setup.py — imgshape v4.1.0 (Atlas)
 from setuptools import setup, find_packages
 
 # read long description
@@ -7,9 +7,9 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="imgshape",
-    version="4.0.0",
+    version="4.1.0",
     description=(
-        "imgshape v4.0.0 (Atlas) — Dataset intelligence layer: "
+        "imgshape v4.1.0 (Atlas) — Dataset intelligence layer: "
         "deterministic fingerprinting and decision-making for ML pipelines. "
         "FastAPI web service, plugin system, and Atlas orchestrator."
     ),
