@@ -19,6 +19,8 @@ from typing import Dict, List, Optional, Any, Union
 from dataclasses import dataclass, asdict, field
 from enum import Enum
 from pathlib import Path
+import hashlib
+import json
 
 from imgshape.fingerprint_v4 import (
     DatasetFingerprint, 
@@ -96,6 +98,7 @@ class Alternative:
     """An alternative that was considered but not selected"""
     option: Union[str, int, float, Dict[str, Any]]
     rejected_because: str
+    score: Optional[float] = None  # v4.1: Higher is better
 
 
 @dataclass
@@ -112,8 +115,7 @@ class Decision:
     risks: List[Risk]
     tradeoffs: List[Tradeoff]
     alternatives_considered: List[Alternative]
-    confidence: Optional[float] = None
-    dependencies: List[str] = field(default_factory=list)
+    provenance_id: Optional[str] = None  # v4.1: Rule ID
     metadata: Dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> Dict[str, Any]:
@@ -153,6 +155,7 @@ class DecisionsCollection:
     schema_version: str
     fingerprint_id: str
     decisions: Dict[str, Decision]
+    reproducibility_hash: str  # v4.1: SHA-256 of fingerprint + decisions
     metadata: Dict[str, Any]
 
     def to_dict(self) -> Dict[str, Any]:
@@ -224,7 +227,7 @@ class DecisionEngine:
 
         # Build collection
         collection = DecisionsCollection(
-            schema_version="4.0",
+            schema_version="4.1",  # v4.1
             fingerprint_id=fingerprint.dataset_uri,
             decisions={
                 "model_family": model_family,
@@ -236,6 +239,7 @@ class DecisionEngine:
                 "loss_function": loss_function,
                 "sampling_strategy": sampling_strategy
             },
+            reproducibility_hash="", # Set below
             metadata={
                 "rule_engine_version": self.rule_version,
                 "user_intent": {
@@ -248,8 +252,22 @@ class DecisionEngine:
                 }
             }
         )
-
+        
+        # Calculate reproducibility hash (v4.1)
+        collection.reproducibility_hash = self._calculate_reproducibility_hash(fingerprint, collection)
+        
         return collection
+
+    def _calculate_reproducibility_hash(self, fingerprint: DatasetFingerprint, collection: DecisionsCollection) -> str:
+        """Calculate SHA-256 hash of fingerprint and decisions for reproducibility tracking"""
+        # We use a stable JSON representation for hashing
+        data = {
+            "fingerprint": fingerprint.dataset_uri,
+            "rule_version": self.rule_version,
+            "decisions": {k: str(d.selected) for k, d in collection.decisions.items()}
+        }
+        encoded = json.dumps(data, sort_keys=True).encode('utf-8')
+        return hashlib.sha256(encoded).hexdigest()
 
     def _decide_model_family(
         self,
@@ -262,12 +280,11 @@ class DecisionEngine:
         semantic = fingerprint.profiles['semantic']
         signal = fingerprint.profiles['signal']
         
-        # Rule table for model family selection
-        selected = None
         why = []
         risks = []
         tradeoffs = []
         alternatives = []
+        provenance_id = "BASE"
 
         # Primary rule: capacity ceiling gates model choice
         capacity = signal.capacity_ceiling
@@ -290,9 +307,11 @@ class DecisionEngine:
                 cost="Reduced representational capacity"
             ))
             
+            provenance_id = "R-MODEL-SIZE-LT-20"
             alternatives.append(Alternative(
                 option="MobileNetV3-Large",
-                rejected_because="Exceeds model size constraint"
+                rejected_because="Exceeds model size constraint",
+                score=0.4
             ))
             
         elif capacity == CapacityCeiling.LIGHTWEIGHT:
@@ -305,9 +324,11 @@ class DecisionEngine:
                 description="May need capacity increase if dataset grows in complexity"
             ))
             
+            provenance_id = "R-MODEL-CAP-LW"
             alternatives.append(Alternative(
                 option="EfficientNetB0",
-                rejected_because="More capacity than needed based on signal analysis"
+                rejected_because="More capacity than needed based on signal analysis",
+                score=0.6
             ))
             
         elif capacity == CapacityCeiling.STANDARD:
@@ -318,15 +339,18 @@ class DecisionEngine:
                 selected = "ResNet50"
                 why.append("Standard capacity, cloud deployment permits larger models")
             
+            provenance_id = f"R-MODEL-CAP-STD-{'EDGE' if intent.deployment_target in (DeploymentTarget.EDGE, DeploymentTarget.MOBILE) else 'CLOUD'}"
             alternatives.append(Alternative(
                 option="VGG16",
-                rejected_because="Inefficient architecture for modern deployments"
+                rejected_because="Inefficient architecture for modern deployments",
+                score=0.2
             ))
             
         elif capacity == CapacityCeiling.HEAVY:
             selected = "EfficientNetB4"
             why.append("High signal density requires heavy model capacity")
             
+            provenance_id = "R-MODEL-CAP-HEAVY"
             risks.append(Risk(
                 severity=RiskSeverity.MEDIUM,
                 description="Longer training time and higher compute requirements"
@@ -336,6 +360,7 @@ class DecisionEngine:
             selected = "EfficientNetB7"
             why.append("Very high complexity dataset requires maximum capacity")
             
+            provenance_id = "R-MODEL-CAP-UNLIMITED"
             risks.append(Risk(
                 severity=RiskSeverity.HIGH,
                 description="Very high computational cost",
@@ -355,7 +380,7 @@ class DecisionEngine:
             risks=risks,
             tradeoffs=tradeoffs,
             alternatives_considered=alternatives,
-            confidence=0.9,
+            provenance_id=f"v4.1.0-rules-model-{provenance_id}",
             metadata={
                 "rule_version": self.rule_version,
                 "fingerprint_inputs": ["signal.capacity_ceiling", "semantic.primary_domain"]

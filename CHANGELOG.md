@@ -5,7 +5,46 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [4.1.0] - 2026-03-01
+
+### v4.1.0
+
+The **v4.1.0** release enhances the v4 core with GPU acceleration, statistical dataset comparison, and improved decision traceability.
+
+### 🚀 New Features
+
+#### 1. **GPU Acceleration (PyTorch)**
+
+- **Hardware-Aware Engine**: Automatically detects CUDA and offloads heavy computations
+- **Accelerated Entropy**: Up to 15x faster entropy calculation for large datasets
+- **Accelerated Blur Detection**: Laplacian variance computation using Torch convolutions
+- **Direct Stat Projections**: Real-time signal analysis on GPU memory
+
+#### 2. **Dataset Comparison & Drift**
+
+- **Similarity Indexing**: Calculate geometric and semantic similarity between datasets (0.0 to 1.0)
+- **Drift Detection**: Quantitative drift scoring using histogram intersection and metric deltas
+- **Delta Reporting**: Automated Markdown reports highlighting statistical shifts between dataset versions
+- **Signal Tracking**: Monitor changes in entropy stability and color distribution over time
+
+#### 3. **Decision Intelligence v4.1**
+
+- **Provenance IDs**: Every decision now linked to a specific rule ID (e.g., `R-MODEL-SIZE-LT-20`) for auditability
+- **Reproducibility Hashing**: Unique SHA256 hashes for decision collections ensuring stable pipeline outcomes
+- **Alternative Scoring**: Trade-offs and alternative choices now include normalized impact scores
+- **Extended Metrics**: Added Aspect Ratio Clustering, Channel Variance, and 256-bin Color Histograms
+
+### 🛠️ Improvements & Fixes
+
+- **CLI**: Added `--compare`, `--drift`, and `--benchmark` commands
+- **API**: New endpoints for comparison, drift analysis, and performance benchmarking
+- **UI**: Modernized branding for v4.1.0 and added GPU status indicators
+- **Metadata**: Enhanced dataset fingerprints with acceleration type and imgshape version tracking
+
+---
+
 ## [4.0.0] - 2025-12-29
+
 ### 🌟 Atlas Major Release
 
 The **v4.0.0 "Atlas"** release represents a fundamental architectural redesign of imgshape, shifting from heuristic-based recommendations to deterministic dataset intelligence with complete explainability.
@@ -13,6 +52,7 @@ The **v4.0.0 "Atlas"** release represents a fundamental architectural redesign o
 ### 🚀 Major Features
 
 #### 1. **Deterministic Fingerprinting Engine**
+
 - **5-Profile Fingerprinting System**
   - 📐 **Spatial Profile**: Image dimensions, aspect ratios, scale distribution analysis
   - 🔌 **Signal Profile**: Channel count, bit depth, dynamic range characterization
@@ -27,6 +67,7 @@ The **v4.0.0 "Atlas"** release represents a fundamental architectural redesign o
   - CI/CD-safe fingerprint locking (`.fingerprint_lock` files)
 
 #### 2. **Rule-Based Decision Engine**
+
 - **8 Core Decision Domains**
   - Model family selection (ResNet, MobileNet, ViT, EfficientNet, etc.)
   - Input dimension optimization (224×224, 512×512, custom)
@@ -44,6 +85,7 @@ The **v4.0.0 "Atlas"** release represents a fundamental architectural redesign o
   - Metrics-based decision justification
 
 #### 3. **Deployable Artifacts**
+
 - **Production-Ready Exports**
   - JSON, YAML, Protocol Buffer formats
   - Version-controlled artifact storage
@@ -52,6 +94,7 @@ The **v4.0.0 "Atlas"** release represents a fundamental architectural redesign o
   - Git-friendly (supports `.fingerprint_lock` patterns)
 
 #### 4. **Modern Web Interface (React)**
+
 - **Interactive Dashboard**
   - Real-time fingerprint generation and visualization
   - Decision explorer with full reasoning display
@@ -68,6 +111,7 @@ The **v4.0.0 "Atlas"** release represents a fundamental architectural redesign o
   - Graceful fallback to Jinja2 templates
 
 #### 5. **Enhanced CLI**
+
 - **New v4 Commands**
   - `imgshape --fingerprint <path>` - Generate dataset fingerprint
   - `imgshape --atlas <path>` - Full analysis with all profiles
@@ -83,6 +127,7 @@ The **v4.0.0 "Atlas"** release represents a fundamental architectural redesign o
   - `--verbose` - detailed reasoning output
 
 #### 6. **Docker & Cloud Deployment**
+
 - **Multi-Stage Dockerfile**
   - Stage 1: Node.js 18-Alpine (builds React UI)
   - Stage 2: Python 3.12-slim (runs FastAPI service)
@@ -97,6 +142,7 @@ The **v4.0.0 "Atlas"** release represents a fundamental architectural redesign o
   - Environment-agnostic configuration
 
 #### 7. **Testing & Validation**
+
 - **Comprehensive Test Suite**
   - 33 tests across all modules
   - 26/33 passing (79% - 7 optional artifact tests)
@@ -193,7 +239,7 @@ result = atlas.analyze("dataset/", task="classification")
 
 ### 📝 Documentation
 
-- Full API documentation: https://stifler7.github.io/imgshape
+- Full API documentation: <https://stifler7.github.io/imgshape>
 - v4 Design Document: [v4.md](v4.md)
 - Contributing Guide: [CONTRIBUTING.md](CONTRIBUTING.md)
 - Deployment Guide: [CLOUD_RUN_DEPLOYMENT.md](CLOUD_RUN_DEPLOYMENT.md)
@@ -205,11 +251,13 @@ Thanks to all contributors who made v4.0.0 possible!
 ---
 
 ## [3.0.0] - 2025-10-15  
+
 ### 🌌 Aurora Major Release
 
 The **v3.0.0 "Aurora"** release transforms `imgshape` from a simple CLI toolkit into a **modular dataset intelligence framework** with Streamlit UI, pipeline export, and plugin ecosystem.
 
 ### 🚀 Major Highlights
+
 - **Unified Streamlit Interface (`app.py` at repo root):**
   - 6 intuitive tabs: Shape, Analyze, Recommend, Augment Visualizer, Reports, Pipeline Export
   - New liquid-glass dark theme and responsive layout
@@ -242,18 +290,21 @@ The **v3.0.0 "Aurora"** release transforms `imgshape` from a simple CLI toolkit 
   - Integrated into both CLI and Streamlit UI
 
 ### ✨ Enhancements
+
 - Lazy import system → lightweight and startup-fast
 - Streamlit deprecation fixes
 - Modular build system with `pyproject.toml`
 - New optional extras: `torch`, `ui`, `viz`, `pdf`, `plugins`, `full`, `dev`
 
 ### 🐛 Fixes
+
 - Fixed duplicate image counting in dataset analyzer
 - Improved entropy computation on grayscale inputs
 - Defensive error handling in plugin loader
 - Fully backward compatible with legacy test suite
 
 ### 🧪 Testing & Validation
+
 - Complete local test suite (`pytest -q`)
 - Verified CLI, Streamlit, and lazy import consistency
 - Manual regression pass across all features
@@ -261,7 +312,9 @@ The **v3.0.0 "Aurora"** release transforms `imgshape` from a simple CLI toolkit 
 ---
 
 ## [2.2.0] - 2025-09-22
+
 ### 🚀 Major Release
+
 - Introduced full **Streamlit App** (`app.py`) with 5 interactive tabs
 - CLI, Streamlit, and test suite aligned for consistent workflows
 - TorchLoader, AugmentationRecommender, CompatibilityChecker features
@@ -271,6 +324,7 @@ The **v3.0.0 "Aurora"** release transforms `imgshape` from a simple CLI toolkit 
 ---
 
 ## [2.1.x] - 2025-06 → 2025-09
+
 - Incremental fixes for augmentation, compatibility API, and report stability
 - Early Streamlit prototype introduced
 - Partial pytest alignment
@@ -278,12 +332,14 @@ The **v3.0.0 "Aurora"** release transforms `imgshape` from a simple CLI toolkit 
 ---
 
 ## [2.0.0] - 2025-04
+
 - Major refactor: modularized analyze, recommender, augmentations, and CLI
 - Introduced initial test suite and CI compatibility
 
 ---
 
 ## [1.x.x] - 2025
+
 - Initial releases: core CLI tools for image shape detection and dataset analysis
 
 ---
@@ -291,6 +347,7 @@ The **v3.0.0 "Aurora"** release transforms `imgshape` from a simple CLI toolkit 
 ## 🎯 Roadmap
 
 ### Planned for 4.1.x
+
 - ONNX / TensorRT export helpers for edge inference
 - Auto-EDA visual previews (histograms, class imbalance)
 - Enhanced metrics dashboard
@@ -298,6 +355,7 @@ The **v3.0.0 "Aurora"** release transforms `imgshape` from a simple CLI toolkit 
 - GPU-accelerated fingerprinting
 
 ### Planned for 5.x.x (Future)
+
 - Multi-modal support (video, audio, 3D)
 - Distributed fingerprinting (Dask, Ray)
 - Federated learning dataset analysis

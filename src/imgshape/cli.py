@@ -1,8 +1,9 @@
 # src/imgshape/cli.py
 """
-imgshape CLI (v4.0.0 Atlas)
+imgshape CLI (v4.1.0)
 - Preserves v2/v3 CLI commands for backward compatibility
 - Adds v4 Atlas commands: --atlas, --fingerprint, --decisions
+- Adds v4.1 commands: --compare, --drift, --benchmark
 - Adds `--web` to directly launch web UI (service/app.py)
 """
 
@@ -52,7 +53,7 @@ except Exception:
 # CLI argument parser
 # ----------------------------
 def cli_args() -> argparse.Namespace:
-    p = argparse.ArgumentParser(prog="imgshape", description="imgshape CLI (v4.0.0 Atlas)")
+    p = argparse.ArgumentParser(prog="imgshape", description="imgshape CLI (v4.1.0 Atlas)")
 
     # Core arguments
     p.add_argument("--path", type=str, help="Path to image or dataset folder")
@@ -72,6 +73,11 @@ def cli_args() -> argparse.Namespace:
     p.add_argument("--fingerprint", action="store_true", help="Extract v4 dataset fingerprint only")
     p.add_argument("--decisions", action="store_true", help="Make decisions from fingerprint (requires --fingerprint-file)")
     p.add_argument("--fingerprint-file", type=str, help="Path to existing fingerprint.json (for --decisions)")
+    
+    # v4.1 additions
+    p.add_argument("--compare", nargs=2, metavar=('BASE', 'CURR'), help="Compare two datasets/fingerprints")
+    p.add_argument("--drift", nargs=2, metavar=('BASE', 'CURR'), help="Calculate drift between two datasets/fingerprints")
+    p.add_argument("--benchmark", action="store_true", help="Run performance benchmark (CPU vs GPU)")
     
     # v4 intent parameters
     p.add_argument("--task", type=str, choices=["classification", "detection", "segmentation", "generation", "other"], 
@@ -254,6 +260,46 @@ def main() -> None:
                 
     elif args.fingerprint and not V4_AVAILABLE:
         print("❌ v4 fingerprint not available. Check installation.")
+
+    # v4.1 Comparison and Drift
+    if (args.compare or args.drift) and V4_AVAILABLE:
+        p1_arg, p2_arg = args.compare if args.compare else args.drift
+        print(f"\n📊 Comparing datasets: {p1_arg} vs {p2_arg}")
+        try:
+            atlas = Atlas()
+            if args.drift:
+                result = atlas.compare(Path(p1_arg), Path(p2_arg))
+                # drift is a DriftScore dataclass
+                drift = result["drift"]
+                print(f"Drift Score: {drift.overall_drift:.4f}")
+                print(f"Significant: {'YES' if drift.is_significant else 'NO'}")
+                for r in drift.rationale:
+                    print(f" - {r}")
+            else:
+                f1 = atlas.extractor.extract(Path(p1_arg))
+                f2 = atlas.extractor.extract(Path(p2_arg))
+                report = atlas.comparator.generate_delta_report(f1, f2)
+                print("\n" + report)
+        except Exception as e:
+            print(f"❌ Comparison failed: {e}")
+            if args.verbose:
+                import traceback
+                traceback.print_exc()
+
+    # v4.1 Benchmark
+    if args.benchmark and V4_AVAILABLE:
+        from imgshape.fingerprint_v4 import GPUHandler
+        print("\n🚀 Running Performance Benchmark...")
+        print(f"GPU Available: {'YES' if GPUHandler.is_cuda_available() else 'NO'}")
+        if args.path:
+            import time
+            start_time = time.time()
+            atlas = Atlas()
+            atlas.extract_fingerprint(Path(args.path))
+            duration = time.time() - start_time
+            print(f"Analysis Duration: {duration:.2f}s")
+        else:
+            print("Please provide --path for benchmarking.")
 
     # --- NEW: FastAPI Web UI launch ---
     if args.web:

@@ -1,5 +1,5 @@
 """
-Comprehensive pytest suite for imgshape v4.0.0 (Atlas)
+Comprehensive pytest suite for imgshape v4.1.0
 
 Tests cover:
 - Fingerprint extraction (all 5 profiles)
@@ -118,7 +118,7 @@ class TestFingerprintExtractor:
         fingerprint = extractor.extract(temp_dataset)
         
         assert isinstance(fingerprint, DatasetFingerprint)
-        assert fingerprint.schema_version == "4.0"
+        assert fingerprint.schema_version == "4.1"
         assert fingerprint.dataset_uri is not None
     
     def test_spatial_profile(self, temp_dataset):
@@ -207,7 +207,7 @@ class TestFingerprintExtractor:
         
         # Verify can be loaded back
         loaded = json.loads(json_str)
-        assert loaded["schema_version"] == "4.0"
+        assert loaded["schema_version"] == "4.1"
 
 
 # ============================================================================
@@ -219,7 +219,7 @@ class TestDecisionEngine:
     
     def test_engine_initialization(self):
         """Test DecisionEngine can be initialized"""
-        engine = DecisionEngine(rule_version="4.0.0")
+        engine = DecisionEngine(rule_version="4.1.0")
         assert engine is not None
     
     def test_make_decisions(self, temp_dataset, user_intent):
@@ -408,7 +408,7 @@ class TestAtlas:
         fingerprint = atlas.extract_fingerprint(temp_dataset)
         
         assert isinstance(fingerprint, DatasetFingerprint)
-        assert fingerprint.schema_version == "4.0"
+        assert fingerprint.schema_version == "4.1"
     
     def test_full_pipeline_via_analyze(self, temp_dataset, user_intent):
         """Test Atlas.analyze() method for full pipeline"""

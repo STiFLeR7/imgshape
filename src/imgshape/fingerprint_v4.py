@@ -16,14 +16,39 @@ from __future__ import annotations
 import logging
 from typing import Dict, List, Optional, Any, Tuple
 from pathlib import Path
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, asdict, field
 from enum import Enum
 import math
 
 import numpy as np
 from PIL import Image, ImageStat
 
+try:
+    import torch
+    TORCH_AVAILABLE = True
+except ImportError:
+    TORCH_AVAILABLE = False
+
 logger = logging.getLogger("imgshape.fingerprint_v4")
+
+
+# ============================================================================
+# GPU Acceleration Handler
+# ============================================================================
+
+class GPUHandler:
+    """
+    Utility to handle GPU availability and detection.
+    """
+    @staticmethod
+    def is_cuda_available() -> bool:
+        if not TORCH_AVAILABLE:
+            return False
+        return torch.cuda.is_available()
+
+    @staticmethod
+    def get_device() -> str:
+        return "cuda" if GPUHandler.is_cuda_available() else "cpu"
 
 
 # ============================================================================
@@ -149,12 +174,20 @@ class Resolution:
 
 
 @dataclass
+class AspectRatioCluster:
+    """Clustered aspect ratios found in the dataset"""
+    ratio: float
+    frequency: float
+
+
+@dataclass
 class SpatialProfile:
     """Geometric constraints and resizing risk assessment"""
     resolution_range: Dict[str, Resolution]
     aspect_ratio_variance: float
     resize_risk: ResizeRisk
     geometry_class: GeometryClass
+    aspect_ratio_clusters: List[AspectRatioCluster] = field(default_factory=list)
 
 
 @dataclass
@@ -166,12 +199,29 @@ class EntropyStats:
 
 
 @dataclass
+class EntropyStabilityIndex:
+    """Measures how stable/consistent entropy is across the dataset"""
+    score: float  # 0.0 to 1.0
+    is_stable: bool
+
+
+@dataclass
+class ColorHistogram:
+    """Compact color distribution signature"""
+    bins: List[int]
+    channels: List[str]
+
+
+@dataclass
 class SignalProfile:
     """Information density and noise characteristics"""
     entropy: EntropyStats
     noise_estimate: float
     capacity_ceiling: CapacityCeiling
     information_density: InformationDensity
+    channel_variance: Dict[str, float] = field(default_factory=dict)
+    color_histogram: Optional[ColorHistogram] = None
+    entropy_stability: Optional[EntropyStabilityIndex] = None
 
 
 @dataclass
@@ -308,7 +358,7 @@ class FingerprintExtractor:
         
         # Build fingerprint
         fingerprint = DatasetFingerprint(
-            schema_version="4.0",
+            schema_version="4.1",  # Updated for v4.1
             dataset_uri=dataset_uri,
             profiles={
                 "spatial": spatial,
@@ -321,7 +371,8 @@ class FingerprintExtractor:
             confidence=confidence,
             metadata={
                 "sample_count": len(images),
-                "imgshape_version": "4.0.0"
+                "imgshape_version": "4.1.0",
+                "acceleration": "gpu" if GPUHandler.is_cuda_available() else "cpu"
             }
         )
         
@@ -378,9 +429,19 @@ class FingerprintExtractor:
                 # Compute statistics
                 stat = ImageStat.Stat(img)
                 
-                # Shannon entropy (approximation from variance)
+                # Channel variance
                 variance = stat.var
-                entropy = sum([math.log2(v + 1) for v in variance]) / len(variance)
+                
+                # Histogram (bins=256)
+                hist = img.histogram() # Returns List[int], length 256*channels
+                
+                # Shannon entropy (approximation from variance or direct if GPU)
+                # For v4.1 we improve this with a direct computation
+                img_array = np.array(img)
+                entropy = self._compute_entropy(img_array)
+                
+                # Blur detection (Laplacian variance)
+                blur_score = self._compute_blur(img_array)
                 
                 return {
                     'path': img_path,
@@ -389,11 +450,68 @@ class FingerprintExtractor:
                     'entropy': entropy,
                     'mean': stat.mean,
                     'variance': variance,
-                    'extrema': stat.extrema
+                    'extrema': stat.extrema,
+                    'histogram': hist,
+                    'blur_score': blur_score
                 }
         except Exception as e:
             self.logger.warning(f"Failed to analyze {img_path}: {e}")
             return None
+
+    def _compute_entropy(self, img_array: np.ndarray) -> float:
+        """Compute Shannon entropy, accelerated by GPU if available"""
+        if GPUHandler.is_cuda_available():
+            try:
+                # Direct entropy computation on GPU
+                t_img = torch.from_numpy(img_array).to("cuda").float()
+                # Compute histogram on GPU
+                hist = torch.histc(t_img, bins=256, min=0, max=255)
+                # Normalize to probability
+                dist = hist / hist.sum()
+                # Compute entropy: -sum(p * log2(p))
+                # Add small epsilon to avoid log(0)
+                mask = dist > 0
+                entropy = -torch.sum(dist[mask] * torch.log2(dist[mask]))
+                return float(entropy.cpu().item())
+            except Exception as e:
+                self.logger.debug(f"GPU entropy failed, falling back to CPU: {e}")
+
+        # CPU Fallback
+        _, counts = np.unique(img_array, return_counts=True)
+        probs = counts / counts.sum()
+        entropy = -np.sum(probs * np.log2(probs))
+        return float(entropy)
+
+    def _compute_blur(self, img_array: np.ndarray) -> float:
+        """Compute blur score (Laplacian variance), accelerated by GPU if available"""
+        # Convert to grayscale for blur detection if needed
+        if len(img_array.shape) == 3:
+            # Simple average or weighted
+            gray = np.mean(img_array, axis=2).astype(np.float32)
+        else:
+            gray = img_array.astype(np.float32)
+
+        if GPUHandler.is_cuda_available():
+            try:
+                t_gray = torch.from_numpy(gray).to("cuda").unsqueeze(0).unsqueeze(0)
+                # Laplacian kernel
+                laplacian_kernel = torch.tensor([[0, 1, 0], [1, -4, 1], [0, 1, 0]], 
+                                               device="cuda").float().unsqueeze(0).unsqueeze(0)
+                # Convolve
+                laplacian = torch.nn.functional.conv2d(t_gray, laplacian_kernel)
+                # Variance of Laplacian
+                blur_score = torch.var(laplacian)
+                return float(blur_score.cpu().item())
+            except Exception as e:
+                self.logger.debug(f"GPU blur failed, falling back to CPU: {e}")
+
+        # CPU Fallback using numpy/scipy logic (simple approximation)
+        # Using a simple 3x3 kernel
+        kernel = np.array([[0, 1, 0], [1, -4, 1], [0, 1, 0]])
+        from scipy.signal import convolve2d
+        laplacian = convolve2d(gray, kernel, mode='same')
+        blur_score = np.var(laplacian)
+        return float(blur_score)
 
     def _compute_spatial_profile(self, images: List[Dict[str, Any]]) -> SpatialProfile:
         """Compute spatial profile from image data"""
@@ -427,6 +545,16 @@ class FingerprintExtractor:
         else:
             resize_risk = ResizeRisk.HIGH
         
+        # Aspect Ratio Clustering (v4.1)
+        ars = [round(w/h, 2) for w, h in [s for s in sizes]]
+        unique_ars, ar_counts = np.unique(ars, return_counts=True)
+        ar_clusters = [
+            AspectRatioCluster(ratio=float(r), frequency=float(f/len(images)))
+            for r, f in zip(unique_ars, ar_counts)
+        ]
+        # Sort by frequency
+        ar_clusters = sorted(ar_clusters, key=lambda x: x.frequency, reverse=True)[:5]
+        
         return SpatialProfile(
             resolution_range={
                 'min': min_res,
@@ -435,7 +563,8 @@ class FingerprintExtractor:
             },
             aspect_ratio_variance=ar_variance,
             resize_risk=resize_risk,
-            geometry_class=geometry_class
+            geometry_class=geometry_class,
+            aspect_ratio_clusters=ar_clusters
         )
 
     def _compute_signal_profile(self, images: List[Dict[str, Any]]) -> SignalProfile:
@@ -473,11 +602,46 @@ class FingerprintExtractor:
         else:
             capacity = CapacityCeiling.UNLIMITED
         
+        # Entropy Stability (v4.1)
+        entropy_score = 1.0 - min(1.0, entropy_stats.std / (entropy_stats.mean + 1e-6))
+        entropy_stability = EntropyStabilityIndex(
+            score=float(entropy_score),
+            is_stable=entropy_score > 0.8
+        )
+        
+        # Channel Variance (v4.1)
+        avg_channel_variances = np.mean([img['variance'] for img in images], axis=0)
+        channel_var_dict = {
+            'R': float(avg_channel_variances[0]),
+            'G': float(avg_channel_variances[1]),
+            'B': float(avg_channel_variances[2])
+        }
+        
+        # Color Histogram (v4.1)
+        # Average histograms and downsample for compactness
+        all_histograms = [img['histogram'] for img in images]
+        avg_hist = np.mean(all_histograms, axis=0)
+        # Downsample to 16 bins per channel (compact signature)
+        compact_bins = []
+        for i in range(3):
+            c_hist = avg_hist[i*256 : (i+1)*256]
+            # Sum into 16 bins
+            resampled = [int(sum(c_hist[j*16 : (j+1)*16])) for j in range(16)]
+            compact_bins.extend(resampled)
+            
+        color_hist = ColorHistogram(
+            bins=compact_bins,
+            channels=['R', 'G', 'B']
+        )
+        
         return SignalProfile(
             entropy=entropy_stats,
             noise_estimate=noise_estimate,
             capacity_ceiling=capacity,
-            information_density=info_density
+            information_density=info_density,
+            channel_variance=channel_var_dict,
+            color_histogram=color_hist,
+            entropy_stability=entropy_stability
         )
 
     def _compute_distribution_profile(self, images: List[Dict[str, Any]]) -> DistributionProfile:

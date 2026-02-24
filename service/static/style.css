@@ -110,6 +110,7 @@ html,body{height:100%;margin:0;background:
 .small{font-size:12px}
 .separator{border:none;height:1px;background:linear-gradient(90deg, transparent, rgba(255,255,255,0.02), transparent);margin:12px 0}
 .flex-spacer{flex:1}
+.hidden{display:none !important}
 
 /* Focus outline accessibility */
 :focus{outline:none}

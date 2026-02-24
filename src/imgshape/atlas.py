@@ -21,6 +21,7 @@ from imgshape.fingerprint_v4 import FingerprintExtractor, DatasetFingerprint
 from imgshape.decision_v4 import DecisionEngine, UserIntent, UserConstraints, TaskType, DeploymentTarget, Priority
 from imgshape.artifacts_v4 import ArtifactGenerator
 from imgshape.validator_v4 import SchemaValidator
+from imgshape.compare_v4 import DatasetComparator
 
 logger = logging.getLogger("imgshape.atlas")
 
@@ -54,6 +55,7 @@ class Atlas:
         """
         self.extractor = FingerprintExtractor(sample_limit=sample_limit)
         self.engine = DecisionEngine(rule_version=rule_version)
+        self.comparator = DatasetComparator()
         self.validator = SchemaValidator() if validate else None
         self.validate_outputs = validate
         self.logger = logger
@@ -103,8 +105,17 @@ class Atlas:
         return {
             "fingerprint": fingerprint,
             "decisions": decisions,
-            "artifacts": artifacts
+            "artifacts": artifacts,
+            "version": "4.1.0"
         }
+
+    def compare(self, baseline_path: Path, current_path: Path) -> Dict[str, Any]:
+        """
+        Compare two datasets (or fingerprints) and return drift/similarity.
+        """
+        f1 = self.extractor.extract(baseline_path)
+        f2 = self.extractor.extract(current_path)
+        return self.comparator.compare(f1, f2)
 
     def extract_fingerprint(self, dataset_path: Path) -> DatasetFingerprint:
         """

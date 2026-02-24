@@ -1,6 +1,6 @@
 # service/app.py
 """
-FastAPI wrapper for imgshape v3.1.0 — robust archive support + UI integration
+FastAPI wrapper for imgshape v4.1.0 — robust archive support + UI integration
 
 Notes:
  - Injects runtime endpoints into the index template as `window.IMGSHAPE` (via Jinja).
@@ -49,13 +49,14 @@ from imgshape.shape import get_shape
 try:
     from imgshape.atlas import Atlas, analyze_dataset as analyze_dataset_v4
     from imgshape.decision_v4 import UserIntent, UserConstraints, TaskType, DeploymentTarget, Priority
-    from imgshape.fingerprint_v4 import FingerprintExtractor
+    from imgshape.fingerprint_v4 import FingerprintExtractor, GPUHandler
+    from imgshape.compare_v4 import DatasetComparator
     V4_AVAILABLE = True
 except ImportError:
     # logger may not be initialized yet; set flag only
     V4_AVAILABLE = False
 
-__version__ = "4.0.0"
+__version__ = "4.1.0"
 
 # -------------------------
 # Configuration (env-driven)
@@ -1177,18 +1178,74 @@ def v4_info():
     
     return JSONResponse({
         "available": True,
-        "version": "4.0.0",
-        "codename": "Atlas",
+        "version": "4.1.0",
+        "codename": "Atlas Reinforcement",
         "features": [
             "deterministic_fingerprinting",
             "five_profile_system",
             "rule_based_decisions",
-            "deployable_artifacts"
+            "deployable_artifacts",
+            "gpu_acceleration",
+            "drift_analysis",
+            "similarity_indexing"
         ],
+        "gpu_available": GPUHandler.is_cuda_available(),
         "task_types": [t.value for t in TaskType],
         "deployment_targets": [d.value for d in DeploymentTarget],
         "priorities": [p.value for p in Priority],
     })
+
+@app.post("/v4/compare", response_class=JSONResponse)
+async def v4_compare(
+    baseline_path: str = Form(...),
+    current_path: str = Form(...),
+):
+    """Compare two datasets and return similarity and drift metrics"""
+    if not V4_AVAILABLE:
+        raise HTTPException(status_code=503, detail="v4 modules not available")
+    
+    try:
+        atlas = Atlas()
+        result = atlas.compare(Path(baseline_path), Path(current_path))
+        # result contains drift (DriftScore) and similarity (SimilarityIndex)
+        # _to_serializable will handle dataclasses
+        return JSONResponse(make_serializable_response(result))
+    except Exception as e:
+        logger.exception("v4_compare failed: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/v4/drift", response_class=JSONResponse)
+async def v4_drift(
+    baseline_path: str = Form(...),
+    current_path: str = Form(...),
+):
+    """Alias for compare, focused on drift rationale"""
+    return await v4_compare(baseline_path, current_path)
+
+@app.post("/v4/benchmark", response_class=JSONResponse)
+async def v4_benchmark(
+    dataset_path: str = Form(...),
+):
+    """Run performance benchmark on a dataset"""
+    if not V4_AVAILABLE:
+        raise HTTPException(status_code=503, detail="v4 modules not available")
+    
+    import time
+    try:
+        start_time = time.time()
+        atlas = Atlas()
+        fps = atlas.extract_fingerprint(Path(dataset_path))
+        duration = time.time() - start_time
+        
+        return JSONResponse({
+            "status": "ok",
+            "gpu_used": GPUHandler.is_cuda_available(),
+            "duration_seconds": duration,
+            "sample_count": fps.metadata.get("sample_count", 0)
+        })
+    except Exception as e:
+        logger.exception("v4_benchmark failed: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/health", response_class=JSONResponse)

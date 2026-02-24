@@ -1,6 +1,7 @@
 ﻿<div align="center">
 
 # 🖼️ imgshape
+
 ### The Data-Centric AI Toolkit for Vision Engineers
 
 [![PyPI Version](https://img.shields.io/pypi/v/imgshape?color=blue&style=for-the-badge)](https://pypi.org/project/imgshape/)
@@ -40,6 +41,7 @@ print(result.summary())
 ```
 
 **System Output:**
+
 ```json
 {
   "fingerprint_id": "fp_8a7d9f2",
@@ -62,7 +64,7 @@ Experience `imgshape`'s capabilities visually. The dashboard provides a real-tim
 
 ![imgshape Dashboard](assets/dashboard_preview.png)
 
-> *Dashboard v4.0.0 showing Atlas API Version, Task Type selection, and System Logs.*
+> *Dashboard v4.1.0 showing GPU acceleration status and drift detection.*
 
 ---
 
@@ -72,10 +74,11 @@ Most vision models fail because of **garbage data**—corrupt files, mixed chann
 
 | Module | Technical Function |
 | :--- | :--- |
-| **🔍 Instant Audit** | Multi-threaded scan for corruption, outliers, and duplicates using high-performance IO. |
-| **🧠 Decision Engine** | Heuristic-based suggestion engine (`Atlas DecisionLayer`) for `Resize`, `Normalize`, and `Augment`. |
+| **🔍 Instant Audit** | Multi-threaded + **GPU-accelerated** scan for entropy, blur, and variance using `PyTorch`. |
+| **🧠 Decision Engine** | Heuristic-based suggestion engine with **Provenance IDs** and **Reproducibility Hashes**. |
+| **📊 Comparison Layer** | NEW: **Drift Analysis** and **Similarity Indexing** between dataset versions. |
 | **🛠️ Pipeline Export** | Generates serialization-safe code for **PyTorch**, **TensorFlow**, and **Albumentations**. |
-| **🎨 Visual Studio** | Local **Streamlit** instance for interactive augmentation testing and hypothesis verification. |
+| **🎨 Visual Studio** | Local **Web Dashboard** for interactive augmentation testing and hypothesis verification. |
 
 ---
 
@@ -94,21 +97,27 @@ Choose your deployment flavor.
 ## 💡 Practical Use Cases
 
 ### 1. The "Sanity Check" (CI/CD Integration)
+
 Block bad data from entering your training bucket. Ideal for GitHub Actions or Jenkins.
+
 ```bash
 # Returns exit code 1 if corrupt files or schema violations are found
 imgshape --check ./new_batch_v2 --strict-schema
 ```
 
 ### 2. The "Pipeline Builder"
+
 Don't guess augmentation parameters. Let the entropy statistics decide.
+
 ```bash
 # analyze -> recommend -> export PyTorch snippet
 imgshape --path ./train_data --analyze --recommend --out transforms.py
 ```
 
 ### 3. The "Visual Explorer"
+
 Verify `RandomCrop` or `ColorJitter` intensity manually before training.
+
 ```bash
 # Launches local studio with auto-reload
 imgshape --web --reload
@@ -141,16 +150,17 @@ graph TD
 ```
 
 ### Core Components
-*   **Atlas Orchestrator:** The central intent-driven API that manages the lifecycle of an analysis session.
-*   **Fingerprint Extractor:** A stateless module that computes immutable signatures for datasets (distributions, channel counts, hashes).
-*   **Decision Engine:** A rule-based system that maps dataset signatures + User Intent (e.g., "Speed" vs "Accuracy") to concrete preprocessing steps.
+
+* **Atlas Orchestrator:** The central intent-driven API that manages the lifecycle of an analysis session.
+* **Fingerprint Extractor:** A stateless module that computes immutable signatures for datasets (distributions, channel counts, hashes).
+* **Decision Engine:** A rule-based system that maps dataset signatures + User Intent (e.g., "Speed" vs "Accuracy") to concrete preprocessing steps.
 
 ---
 
 ## 🤝 Community & Support
 
-*   **Issues**: Found a bug? [Open an issue](https://github.com/STiFLeR7/imgshape/issues).
-*   **Discussions**: Feature requests? [Join the discussion](https://github.com/STiFLeR7/imgshape/discussions).
+* **Issues**: Found a bug? [Open an issue](https://github.com/STiFLeR7/imgshape/issues).
+* **Discussions**: Feature requests? [Join the discussion](https://github.com/STiFLeR7/imgshape/discussions).
 
 <div align="center">
 
