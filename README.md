@@ -5,8 +5,8 @@
 ### The Data-Centric AI Toolkit for Vision Engineers
 
 [![PyPI Version](https://img.shields.io/pypi/v/imgshape?color=blue&style=for-the-badge)](https://pypi.org/project/imgshape/)
-[![Python Version](https://img.shields.io/pypi/pyversions/imgshape?style=for-the-badge&color=yellow)](https://pypi.org/project/imgshape/)
-[![Downloads](https://img.shields.io/pepy/dt/imgshape?style=for-the-badge&color=green)](https://pepy.tech/project/imgshape)
+[![Python 3.8+](https://img.shields.io/badge/Python-3.8+-blue?style=for-the-badge&logo=python&logoColor=white)](https://pypi.org/project/imgshape/)
+[![Downloads](https://img.shields.io/badge/Downloads-6.1K-green?style=for-the-badge)](https://pepy.tech/project/imgshape)
 [![Streamlit](https://img.shields.io/badge/Streamlit-FF4B4B?style=for-the-badge&logo=Streamlit&logoColor=white)](https://streamlit.io)
 
 <br/>
