@@ -4,10 +4,10 @@
 
 ### The Data-Centric AI Toolkit for Vision Engineers
 
+[![Version 4.2.0](https://img.shields.io/badge/version-4.2.0-orange.svg?style=for-the-badge)](https://github.com/STiFLeR7/imgshape/releases/tag/v4.2.0)
 [![PyPI Version](https://img.shields.io/pypi/v/imgshape?color=blue&style=for-the-badge)](https://pypi.org/project/imgshape/)
 [![Python 3.8+](https://img.shields.io/badge/Python-3.8+-blue?style=for-the-badge&logo=python&logoColor=white)](https://pypi.org/project/imgshape/)
 [![Downloads](https://img.shields.io/badge/Downloads-6.1K-green?style=for-the-badge)](https://pepy.tech/project/imgshape)
-[![Streamlit](https://img.shields.io/badge/Streamlit-FF4B4B?style=for-the-badge&logo=Streamlit&logoColor=white)](https://streamlit.io)
 
 <br/>
 
@@ -18,6 +18,15 @@
 [**🚀 Live Demo (Web)**](https://imgshape.vercel.app/) • [**📖 Documentation**](https://github.com/STiFLeR7/imgshape/blob/master/README.md) • [**💬 Report Bug / Discuss**](https://github.com/STiFLeR7/imgshape/discussions)
 
 </div>
+
+---
+
+## ✨ What's New in v4.2 "Bento Intelligence"
+
+*   **🍱 Bento Grid UI:** A complete UX overhaul using a modular 12-column grid for high-density dataset insights.
+*   **🌊 Semantic Drift 2.0:** detect dataset shifts using DINOv2 vision transformer embeddings.
+*   **🚀 Atlas Bento Engine:** 40% faster fingerprinting via vectorized IO and multi-stage caching.
+*   **🧩 Domain Profiles:** One-click configurations for Medical, Satellite, and OCR datasets.
 
 ---
 
@@ -60,11 +69,11 @@ print(result.summary())
 
 ## 🔍 The Visual Dashboard (Atlas UI)
 
-Experience `imgshape`'s capabilities visually. The dashboard provides a real-time interface for **dataset fingerprinting**, **augmentation previews**, and **pipeline configuration**.
+Experience `imgshape`'s capabilities visually. The dashboard provides a real-time interface for **dataset fingerprinting**, **augmentation previews**, and **pipeline configuration** using the new **Bento Grid** layout.
 
 ![imgshape Dashboard](assets/dashboard_preview.png)
 
-> *Dashboard v4.1.0 showing GPU acceleration status and drift detection.*
+> *Dashboard v4.2.0 showing Bento Grid layout and semantic drift detection.*
 
 ---
 
@@ -76,9 +85,9 @@ Most vision models fail because of **garbage data**—corrupt files, mixed chann
 | :--- | :--- |
 | **🔍 Instant Audit** | Multi-threaded + **GPU-accelerated** scan for entropy, blur, and variance using `PyTorch`. |
 | **🧠 Decision Engine** | Heuristic-based suggestion engine with **Provenance IDs** and **Reproducibility Hashes**. |
-| **📊 Comparison Layer** | NEW: **Drift Analysis** and **Similarity Indexing** between dataset versions. |
+| **📊 Semantic Drift** | NEW: **DINOv2-powered** drift analysis between dataset versions. |
+| **🍱 Bento Grid UI** | NEW: High-density **Modular Dashboard** for interactive exploration. |
 | **🛠️ Pipeline Export** | Generates serialization-safe code for **PyTorch**, **TensorFlow**, and **Albumentations**. |
-| **🎨 Visual Studio** | Local **Web Dashboard** for interactive augmentation testing and hypothesis verification. |
 
 ---
 
@@ -135,9 +144,9 @@ graph TD
     A[Raw Images]
     end
 
-    subgraph "imgshape Core (Atlas)"
+    subgraph "imgshape Core (Atlas Bento)"
     B[Fingerprint Extractor] -->|Hash & Meta| C{Decision Engine}
-    C -->|Rules v4.0| D[Recommendation]
+    C -->|Rules v4.2| D[Recommendation]
     end
 
     subgraph "Integration Layer"
@@ -151,7 +160,7 @@ graph TD
 
 ### Core Components
 
-* **Atlas Orchestrator:** The central intent-driven API that manages the lifecycle of an analysis session.
+* **Atlas Bento Orchestrator:** The central intent-driven API that manages the lifecycle of an analysis session.
 * **Fingerprint Extractor:** A stateless module that computes immutable signatures for datasets (distributions, channel counts, hashes).
 * **Decision Engine:** A rule-based system that maps dataset signatures + User Intent (e.g., "Speed" vs "Accuracy") to concrete preprocessing steps.
 
