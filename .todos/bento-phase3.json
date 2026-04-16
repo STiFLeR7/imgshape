@@ -1,0 +1,14 @@
+{
+  "tasks": [
+    {
+      "id": "task1",
+      "title": "Create ControlDrawer Component",
+      "status": "completed"
+    },
+    {
+      "id": "task2",
+      "title": "Refactor App.tsx and Sidebar.tsx",
+      "status": "completed"
+    }
+  ]
+}

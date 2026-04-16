@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Layers, Zap, Target, Cpu } from 'lucide-react';
 import Header from './components/Header';
 import Sidebar from './components/Sidebar';
 import PreviewPanel from './components/PreviewPanel';
@@ -8,10 +9,17 @@ import AugmentationPanel from './components/AugmentationPanel';
 import AugmentationViewer from './components/AugmentationViewer';
 import ReportGenerator from './components/ReportGenerator';
 import ReportViewer from './components/ReportViewer';
+import DriftExplorer from './components/DriftExplorer';
+import KPICard from './components/KPICard';
+import DashboardGrid from './components/DashboardGrid';
+import InsightPanel from './components/InsightPanel';
+import SemanticMap from './components/SemanticMap';
+import ControlDrawer from './components/ControlDrawer';
 import { api } from './services/api';
 import { AppState, V4Config, V3Config, LogEntry, AugmentationConfig, ReportConfig } from './types';
 
 const App: React.FC = () => {
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const [state, setState] = useState<AppState>({
     version: 'v4',
     activeView: 'dashboard',
@@ -45,8 +53,10 @@ const App: React.FC = () => {
     },
     status: 'idle',
     results: null,
+    driftResults: null,
     augmentationResults: null,
     reportResults: null,
+    gpuActive: false,
   });
 
   const [logs, setLogs] = useState<LogEntry[]>([]);
@@ -70,8 +80,13 @@ const App: React.FC = () => {
         const health = await api.checkHealth();
         setServerStatus(true);
         setServerVersion(health.version);
+        setState(prev => ({ ...prev, gpuActive: health.gpu_available }));
         addLog('success', `Connected to imgshape v${health.version}`);
         
+        if (health.gpu_available) {
+            addLog('success', 'GPU Acceleration enabled (PyTorch/CUDA)');
+        }
+
         if (health.v4_available) {
             const v4info = await api.getV4Info();
             addLog('info', `Loaded v4 capabilities: [${v4info.features.join(', ')}]`);
@@ -83,6 +98,14 @@ const App: React.FC = () => {
     };
     init();
   }, []);
+
+  const handleCalculateDrift = (base: string, curr: string) => {
+    executeAction(
+      'Drift Analysis',
+      () => api.calculateDrift(base, curr),
+      (data) => setState(prev => ({ ...prev, status: 'success', driftResults: data }))
+    );
+  };
 
   const handleStateChange = (updates: Partial<AppState>) => {
     setState((prev) => ({ ...prev, ...updates }));
@@ -204,6 +227,16 @@ const App: React.FC = () => {
 
   const renderContent = () => {
     switch (state.activeView) {
+      case 'drift':
+        return (
+          <DriftExplorer 
+            basePath={state.datasetPath}
+            currPath={state.datasetPath}
+            results={state.driftResults}
+            onCalculate={handleCalculateDrift}
+            isLoading={state.status === 'loading'}
+          />
+        );
       case 'augmentation':
         return (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-full min-h-[400px]">
@@ -248,48 +281,110 @@ const App: React.FC = () => {
       case 'dashboard':
       default:
         return (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 min-h-[400px]">
-            <PreviewPanel 
-                file={state.file}
-                imageUrl={state.filePreviewUrl}
-                datasetPath={state.datasetPath}
-                isLoading={state.status === 'loading'}
-            />
-            <ResultsPanel 
-                data={state.results}
-                status={state.status}
-            />
-          </div>
+          <DashboardGrid>
+            {/* KPI Row */}
+            <div className="lg:col-span-3">
+              <KPICard 
+                label="Total Samples" 
+                value={state.results?.fingerprint?.sample_count || '0'} 
+                icon={Layers} 
+                loading={state.status === 'loading'}
+              />
+            </div>
+            <div className="lg:col-span-3">
+              <KPICard 
+                label="Drift Confidence" 
+                value={state.results?.drift?.overall_drift ? `${(100 - state.results.drift.overall_drift * 100).toFixed(1)}%` : '100%'} 
+                icon={Zap} 
+                color="amber"
+                loading={state.status === 'loading'}
+              />
+            </div>
+            <div className="lg:col-span-3">
+               <KPICard 
+                label="Detected Domain" 
+                value={state.results?.fingerprint?.profiles?.semantic?.inferred_type || 'Unknown'} 
+                icon={Target} 
+                color="indigo"
+                loading={state.status === 'loading'}
+              />
+            </div>
+            <div className="lg:col-span-3">
+               <KPICard 
+                label="Processing" 
+                value={state.gpuActive ? 'GPU' : 'CPU'} 
+                subtext={state.gpuActive ? 'PyTorch/CUDA' : 'Standard'}
+                icon={Cpu} 
+                color="purple"
+                loading={state.status === 'loading'}
+              />
+            </div>
+
+            {/* Middle Row */}
+            <div className="lg:col-span-8 min-h-[400px]">
+                <SemanticMap 
+                    embedding={state.results?.fingerprint?.profiles?.semantic?.latent_embedding}
+                    loading={state.status === 'loading'}
+                />
+            </div>
+            <div className="lg:col-span-4 min-h-[400px]">
+                <InsightPanel 
+                    profiles={state.results?.fingerprint?.profiles}
+                    loading={state.status === 'loading'}
+                />
+            </div>
+
+            {/* Bottom Row */}
+            <div className="lg:col-span-4 min-h-[400px]">
+                <PreviewPanel 
+                    file={state.file} 
+                    imageUrl={state.filePreviewUrl} 
+                    datasetPath={state.datasetPath}
+                    isLoading={state.status === 'loading'}
+                />
+            </div>
+
+            <div className="lg:col-span-8 min-h-[400px] flex flex-col">
+                <ResultsPanel 
+                    data={state.results}
+                    status={state.status}
+                />
+            </div>
+          </DashboardGrid>
         );
     }
   };
 
   return (
     <div className="flex flex-col h-screen bg-background text-gray-100 overflow-hidden">
-      <Header serverVersion={serverVersion} serverStatus={serverStatus} />
+      <Header 
+        serverVersion={serverVersion} 
+        serverStatus={serverStatus} 
+        gpuActive={state.gpuActive} 
+        onAnalyze={handleAnalyze}
+        isAnalyzing={state.status === 'loading'}
+      />
       
-      <main className="flex flex-1 overflow-hidden">
+      <main className="flex flex-1 overflow-hidden relative">
         <Sidebar 
+          state={state}
+          onStateChange={handleStateChange}
+          onOpenSettings={() => setDrawerOpen(true)}
+        />
+
+        <ControlDrawer 
+          isOpen={drawerOpen}
+          onClose={() => setDrawerOpen(false)}
           state={state}
           onStateChange={handleStateChange}
           onConfigV4Change={handleV4ConfigChange}
           onConfigV3Change={handleV3ConfigChange}
-          onAnalyze={handleAnalyze}
-          onFingerprint={handleFingerprint}
-          onRecommend={handleRecommend}
-          onDownloadJson={handleDownloadJson}
-          onCopyJson={handleCopyJson}
         />
 
         <div className="flex-1 flex flex-col p-6 space-y-6 overflow-y-auto custom-scrollbar">
             {/* Main Content Area */}
             <div className="flex-1 min-h-[400px] flex flex-col">
               {renderContent()}
-            </div>
-            
-            {/* Logs Area - Always Visible */}
-            <div className="flex-none h-48 md:h-64">
-                <LogsPanel logs={logs} />
             </div>
         </div>
       </main>

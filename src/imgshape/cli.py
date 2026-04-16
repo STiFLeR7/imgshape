@@ -1,8 +1,8 @@
 # src/imgshape/cli.py
 """
-imgshape CLI (v4.1.0)
+imgshape CLI (v4.2.0)
 - Preserves v2/v3 CLI commands for backward compatibility
-- Adds v4 Atlas commands: --atlas, --fingerprint, --decisions
+- Adds v4 Atlas Bento commands: --atlas, --fingerprint, --decisions
 - Adds v4.1 commands: --compare, --drift, --benchmark
 - Adds `--web` to directly launch web UI (service/app.py)
 """
@@ -53,7 +53,7 @@ except Exception:
 # CLI argument parser
 # ----------------------------
 def cli_args() -> argparse.Namespace:
-    p = argparse.ArgumentParser(prog="imgshape", description="imgshape CLI (v4.1.0 Atlas)")
+    p = argparse.ArgumentParser(prog="imgshape", description="imgshape CLI (v4.2.0 Atlas Bento)")
 
     # Core arguments
     p.add_argument("--path", type=str, help="Path to image or dataset folder")

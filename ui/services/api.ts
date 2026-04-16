@@ -38,6 +38,23 @@ class ApiService {
     return await response.json();
   }
 
+  async calculateDrift(basePath: string, currPath: string) {
+    const formData = new FormData();
+    formData.append('baseline_path', basePath);
+    formData.append('current_path', currPath);
+
+    const response = await fetch(`${BASE_URL}/v4/compare`, {
+      method: 'POST',
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Drift calculation failed: ${response.status} - ${errorText}`);
+    }
+    return await response.json();
+  }
+
   async analyzeV4(file: File | null, datasetPath: string, config: V4Config) {
     const formData = new FormData();
     if (file) formData.append('file', file);

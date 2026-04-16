@@ -1,0 +1,14 @@
+{
+  "tasks": [
+    {
+      "id": "task1",
+      "title": "Create KPICard Component",
+      "status": "completed"
+    },
+    {
+      "id": "task2",
+      "title": "Implement DashboardGrid in App.tsx",
+      "status": "completed"
+    }
+  ]
+}

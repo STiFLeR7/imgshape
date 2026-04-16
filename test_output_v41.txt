@@ -1,0 +1,1131 @@
+C:\Users\stifl\AppData\Local\Programs\Python\Python312\Lib\site-packages\pytest_asyncio\plugin.py:247: PytestDeprecationWarning: The configuration option "asyncio_default_fixture_loop_scope" is unset.
+The event loop scope for asynchronous fixtures will default to the fixture caching scope. Future versions of pytest-asyncio will default the loop scope for asynchronous fixtures to function scope. Set the default fixture loop scope explicitly in order to avoid unexpected behavior in the future. Valid fixture loop scopes are: "function", "class", "module", "package", "session"
+
+  warnings.warn(PytestDeprecationWarning(_DEFAULT_FIXTURE_LOOP_SCOPE_UNSET))
+============================= test session starts =============================
+platform win32 -- Python 3.12.4, pytest-8.3.5, pluggy-1.6.0
+rootdir: D:\imgshape
+configfile: pyproject.toml
+plugins: anyio-4.11.0, langsmith-0.3.45, opik-1.9.98, asyncio-1.3.0, cov-7.0.0, timeout-2.4.0
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 33 items
+
+tests\v4_test.py .F........FFFFFF.sssss.ss.FFFFFF.                       [100%]
+
+================================== FAILURES ===================================
+______________ TestFingerprintExtractor.test_extract_fingerprint ______________
+
+self = <v4_test.TestFingerprintExtractor object at 0x0000024C407485C0>
+temp_dataset = WindowsPath('C:/Users/stifl/AppData/Local/Temp/tmpzdf3ukv0/test_dataset')
+
+    def test_extract_fingerprint(self, temp_dataset):
+        """Test basic fingerprint extraction"""
+        extractor = FingerprintExtractor()
+        fingerprint = extractor.extract(temp_dataset)
+    
+        assert isinstance(fingerprint, DatasetFingerprint)
+>       assert fingerprint.schema_version == "4.0"
+E       AssertionError: assert '4.1' == '4.0'
+E         
+E         - 4.0
+E         + 4.1
+
+tests\v4_test.py:121: AssertionError
+___________________ TestDecisionEngine.test_make_decisions ____________________
+
+self = <v4_test.TestDecisionEngine object at 0x0000024C40749850>
+temp_dataset = WindowsPath('C:/Users/stifl/AppData/Local/Temp/tmp2h7bf342/test_dataset')
+user_intent = UserIntent(task=<TaskType.CLASSIFICATION: 'classification'>, deployment_target=<DeploymentTarget.CLOUD: 'cloud'>, priority=<Priority.BALANCED: 'balanced'>)
+
+    def test_make_decisions(self, temp_dataset, user_intent):
+        """Test basic decision making"""
+        extractor = FingerprintExtractor()
+        fingerprint = extractor.extract(temp_dataset)
+    
+        engine = DecisionEngine()
+>       decisions = engine.decide(fingerprint, user_intent)
+
+tests\v4_test.py:231: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+src\imgshape\decision_v4.py:219: in decide
+    model_family = self._decide_model_family(fingerprint, intent, constraints)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <imgshape.decision_v4.DecisionEngine object at 0x0000024C408118B0>
+fingerprint = DatasetFingerprint(schema_version='4.1', dataset_uri='imgshape://vision/synthetic/structured', profiles={'spatial': Sp...nthetic.structured', confidence=0.9, metadata={'sample_count': 10, 'imgshape_version': '4.1.0', 'acceleration': 'gpu'})
+intent = UserIntent(task=<TaskType.CLASSIFICATION: 'classification'>, deployment_target=<DeploymentTarget.CLOUD: 'cloud'>, priority=<Priority.BALANCED: 'balanced'>)
+constraints = UserConstraints(max_model_size_mb=None, max_inference_time_ms=None, available_memory_mb=None)
+
+    def _decide_model_family(
+        self,
+        fingerprint: DatasetFingerprint,
+        intent: UserIntent,
+        constraints: UserConstraints
+    ) -> Decision:
+        """Decide on model family"""
+    
+        semantic = fingerprint.profiles['semantic']
+        signal = fingerprint.profiles['signal']
+    
+        alternatives = []
+        provenance_id = "BASE"
+    
+        # Primary rule: capacity ceiling gates model choice
+        capacity = signal.capacity_ceiling
+    
+        if constraints.max_model_size_mb and constraints.max_model_size_mb < 20:
+            # Severe size constraint
+            selected = "MobileNetV3-Small"
+            why.append("Strict model size constraint (< 20MB) requires lightweight architecture")
+            why.append(f"Dataset capacity ceiling is {capacity.value}, which permits lightweight models")
+    
+            risks.append(Risk(
+                severity=RiskSeverity.MEDIUM,
+                description="Lightweight model may underfit high-complexity datasets",
+                mitigation="Monitor validation metrics and consider knowledge distillation"
+            ))
+    
+            tradeoffs.append(Tradeoff(
+                aspect="model_size",
+                gain="Fits deployment constraint",
+                cost="Reduced representational capacity"
+            ))
+    
+            provenance_id = "R-MODEL-SIZE-LT-20"
+            alternatives.append(Alternative(
+                option="MobileNetV3-Large",
+                rejected_because="Exceeds model size constraint",
+                score=0.4
+            ))
+    
+        elif capacity == CapacityCeiling.LIGHTWEIGHT:
+            selected = "MobileNetV3"
+            why.append("Signal profile indicates lightweight model is sufficient")
+            why.append(f"Information density is {signal.information_density.value}")
+    
+            risks.append(Risk(
+                severity=RiskSeverity.LOW,
+                description="May need capacity increase if dataset grows in complexity"
+            ))
+    
+            provenance_id = "R-MODEL-CAP-LW"
+            alternatives.append(Alternative(
+                option="EfficientNetB0",
+                rejected_because="More capacity than needed based on signal analysis",
+                score=0.6
+            ))
+    
+        elif capacity == CapacityCeiling.STANDARD:
+            if intent.deployment_target in (DeploymentTarget.EDGE, DeploymentTarget.MOBILE):
+                selected = "EfficientNetB1"
+                why.append("Standard capacity needed, edge deployment requires efficiency")
+            else:
+                selected = "ResNet50"
+>               why.append("Standard capacity, cloud deployment permits larger models")
+E               NameError: name 'why' is not defined
+
+src\imgshape\decision_v4.py:337: NameError
+__________________ TestDecisionEngine.test_decision_domains ___________________
+
+self = <v4_test.TestDecisionEngine object at 0x0000024C40749760>
+temp_dataset = WindowsPath('C:/Users/stifl/AppData/Local/Temp/tmpfoovd6ck/test_dataset')
+user_intent = UserIntent(task=<TaskType.CLASSIFICATION: 'classification'>, deployment_target=<DeploymentTarget.CLOUD: 'cloud'>, priority=<Priority.BALANCED: 'balanced'>)
+
+    def test_decision_domains(self, temp_dataset, user_intent):
+        """Test all decision domains are covered"""
+        extractor = FingerprintExtractor()
+        fingerprint = extractor.extract(temp_dataset)
+    
+        engine = DecisionEngine()
+>       decisions = engine.decide(fingerprint, user_intent)
+
+tests\v4_test.py:242: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+src\imgshape\decision_v4.py:219: in decide
+    model_family = self._decide_model_family(fingerprint, intent, constraints)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <imgshape.decision_v4.DecisionEngine object at 0x0000024C408136B0>
+fingerprint = DatasetFingerprint(schema_version='4.1', dataset_uri='imgshape://vision/synthetic/structured', profiles={'spatial': Sp...nthetic.structured', confidence=0.9, metadata={'sample_count': 10, 'imgshape_version': '4.1.0', 'acceleration': 'gpu'})
+intent = UserIntent(task=<TaskType.CLASSIFICATION: 'classification'>, deployment_target=<DeploymentTarget.CLOUD: 'cloud'>, priority=<Priority.BALANCED: 'balanced'>)
+constraints = UserConstraints(max_model_size_mb=None, max_inference_time_ms=None, available_memory_mb=None)
+
+    def _decide_model_family(
+        self,
+        fingerprint: DatasetFingerprint,
+        intent: UserIntent,
+        constraints: UserConstraints
+    ) -> Decision:
+        """Decide on model family"""
+    
+        semantic = fingerprint.profiles['semantic']
+        signal = fingerprint.profiles['signal']
+    
+        alternatives = []
+        provenance_id = "BASE"
+    
+        # Primary rule: capacity ceiling gates model choice
+        capacity = signal.capacity_ceiling
+    
+        if constraints.max_model_size_mb and constraints.max_model_size_mb < 20:
+            # Severe size constraint
+            selected = "MobileNetV3-Small"
+            why.append("Strict model size constraint (< 20MB) requires lightweight architecture")
+            why.append(f"Dataset capacity ceiling is {capacity.value}, which permits lightweight models")
+    
+            risks.append(Risk(
+                severity=RiskSeverity.MEDIUM,
+                description="Lightweight model may underfit high-complexity datasets",
+                mitigation="Monitor validation metrics and consider knowledge distillation"
+            ))
+    
+            tradeoffs.append(Tradeoff(
+                aspect="model_size",
+                gain="Fits deployment constraint",
+                cost="Reduced representational capacity"
+            ))
+    
+            provenance_id = "R-MODEL-SIZE-LT-20"
+            alternatives.append(Alternative(
+                option="MobileNetV3-Large",
+                rejected_because="Exceeds model size constraint",
+                score=0.4
+            ))
+    
+        elif capacity == CapacityCeiling.LIGHTWEIGHT:
+            selected = "MobileNetV3"
+            why.append("Signal profile indicates lightweight model is sufficient")
+            why.append(f"Information density is {signal.information_density.value}")
+    
+            risks.append(Risk(
+                severity=RiskSeverity.LOW,
+                description="May need capacity increase if dataset grows in complexity"
+            ))
+    
+            provenance_id = "R-MODEL-CAP-LW"
+            alternatives.append(Alternative(
+                option="EfficientNetB0",
+                rejected_because="More capacity than needed based on signal analysis",
+                score=0.6
+            ))
+    
+        elif capacity == CapacityCeiling.STANDARD:
+            if intent.deployment_target in (DeploymentTarget.EDGE, DeploymentTarget.MOBILE):
+                selected = "EfficientNetB1"
+                why.append("Standard capacity needed, edge deployment requires efficiency")
+            else:
+                selected = "ResNet50"
+>               why.append("Standard capacity, cloud deployment permits larger models")
+E               NameError: name 'why' is not defined
+
+src\imgshape\decision_v4.py:337: NameError
+_______________ TestDecisionEngine.test_decision_has_rationale ________________
+
+self = <v4_test.TestDecisionEngine object at 0x0000024C40749AF0>
+temp_dataset = WindowsPath('C:/Users/stifl/AppData/Local/Temp/tmp96o389vq/test_dataset')
+user_intent = UserIntent(task=<TaskType.CLASSIFICATION: 'classification'>, deployment_target=<DeploymentTarget.CLOUD: 'cloud'>, priority=<Priority.BALANCED: 'balanced'>)
+
+    def test_decision_has_rationale(self, temp_dataset, user_intent):
+        """Test each decision has proper rationale"""
+        extractor = FingerprintExtractor()
+        fingerprint = extractor.extract(temp_dataset)
+    
+        engine = DecisionEngine()
+>       decisions = engine.decide(fingerprint, user_intent)
+
+tests\v4_test.py:261: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+src\imgshape\decision_v4.py:219: in decide
+    model_family = self._decide_model_family(fingerprint, intent, constraints)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <imgshape.decision_v4.DecisionEngine object at 0x0000024C40812ED0>
+fingerprint = DatasetFingerprint(schema_version='4.1', dataset_uri='imgshape://vision/synthetic/structured', profiles={'spatial': Sp...nthetic.structured', confidence=0.9, metadata={'sample_count': 10, 'imgshape_version': '4.1.0', 'acceleration': 'gpu'})
+intent = UserIntent(task=<TaskType.CLASSIFICATION: 'classification'>, deployment_target=<DeploymentTarget.CLOUD: 'cloud'>, priority=<Priority.BALANCED: 'balanced'>)
+constraints = UserConstraints(max_model_size_mb=None, max_inference_time_ms=None, available_memory_mb=None)
+
+    def _decide_model_family(
+        self,
+        fingerprint: DatasetFingerprint,
+        intent: UserIntent,
+        constraints: UserConstraints
+    ) -> Decision:
+        """Decide on model family"""
+    
+        semantic = fingerprint.profiles['semantic']
+        signal = fingerprint.profiles['signal']
+    
+        alternatives = []
+        provenance_id = "BASE"
+    
+        # Primary rule: capacity ceiling gates model choice
+        capacity = signal.capacity_ceiling
+    
+        if constraints.max_model_size_mb and constraints.max_model_size_mb < 20:
+            # Severe size constraint
+            selected = "MobileNetV3-Small"
+            why.append("Strict model size constraint (< 20MB) requires lightweight architecture")
+            why.append(f"Dataset capacity ceiling is {capacity.value}, which permits lightweight models")
+    
+            risks.append(Risk(
+                severity=RiskSeverity.MEDIUM,
+                description="Lightweight model may underfit high-complexity datasets",
+                mitigation="Monitor validation metrics and consider knowledge distillation"
+            ))
+    
+            tradeoffs.append(Tradeoff(
+                aspect="model_size",
+                gain="Fits deployment constraint",
+                cost="Reduced representational capacity"
+            ))
+    
+            provenance_id = "R-MODEL-SIZE-LT-20"
+            alternatives.append(Alternative(
+                option="MobileNetV3-Large",
+                rejected_because="Exceeds model size constraint",
+                score=0.4
+            ))
+    
+        elif capacity == CapacityCeiling.LIGHTWEIGHT:
+            selected = "MobileNetV3"
+            why.append("Signal profile indicates lightweight model is sufficient")
+            why.append(f"Information density is {signal.information_density.value}")
+    
+            risks.append(Risk(
+                severity=RiskSeverity.LOW,
+                description="May need capacity increase if dataset grows in complexity"
+            ))
+    
+            provenance_id = "R-MODEL-CAP-LW"
+            alternatives.append(Alternative(
+                option="EfficientNetB0",
+                rejected_because="More capacity than needed based on signal analysis",
+                score=0.6
+            ))
+    
+        elif capacity == CapacityCeiling.STANDARD:
+            if intent.deployment_target in (DeploymentTarget.EDGE, DeploymentTarget.MOBILE):
+                selected = "EfficientNetB1"
+                why.append("Standard capacity needed, edge deployment requires efficiency")
+            else:
+                selected = "ResNet50"
+>               why.append("Standard capacity, cloud deployment permits larger models")
+E               NameError: name 'why' is not defined
+
+src\imgshape\decision_v4.py:337: NameError
+______________ TestDecisionEngine.test_decision_with_constraints ______________
+
+self = <v4_test.TestDecisionEngine object at 0x0000024C40749FA0>
+temp_dataset = WindowsPath('C:/Users/stifl/AppData/Local/Temp/tmp9uxtv5xv/test_dataset')
+user_intent = UserIntent(task=<TaskType.CLASSIFICATION: 'classification'>, deployment_target=<DeploymentTarget.CLOUD: 'cloud'>, priority=<Priority.BALANCED: 'balanced'>)
+user_constraints = UserConstraints(max_model_size_mb=100, max_inference_time_ms=50, available_memory_mb=4096)
+
+    def test_decision_with_constraints(self, temp_dataset, user_intent, user_constraints):
+        """Test decisions respect user constraints"""
+        extractor = FingerprintExtractor()
+        fingerprint = extractor.extract(temp_dataset)
+    
+        engine = DecisionEngine()
+>       decisions = engine.decide(fingerprint, user_intent, user_constraints)
+
+tests\v4_test.py:274: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+src\imgshape\decision_v4.py:219: in decide
+    model_family = self._decide_model_family(fingerprint, intent, constraints)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <imgshape.decision_v4.DecisionEngine object at 0x0000024C4083C3E0>
+fingerprint = DatasetFingerprint(schema_version='4.1', dataset_uri='imgshape://vision/synthetic/structured', profiles={'spatial': Sp...nthetic.structured', confidence=0.9, metadata={'sample_count': 10, 'imgshape_version': '4.1.0', 'acceleration': 'gpu'})
+intent = UserIntent(task=<TaskType.CLASSIFICATION: 'classification'>, deployment_target=<DeploymentTarget.CLOUD: 'cloud'>, priority=<Priority.BALANCED: 'balanced'>)
+constraints = UserConstraints(max_model_size_mb=100, max_inference_time_ms=50, available_memory_mb=4096)
+
+    def _decide_model_family(
+        self,
+        fingerprint: DatasetFingerprint,
+        intent: UserIntent,
+        constraints: UserConstraints
+    ) -> Decision:
+        """Decide on model family"""
+    
+        semantic = fingerprint.profiles['semantic']
+        signal = fingerprint.profiles['signal']
+    
+        alternatives = []
+        provenance_id = "BASE"
+    
+        # Primary rule: capacity ceiling gates model choice
+        capacity = signal.capacity_ceiling
+    
+        if constraints.max_model_size_mb and constraints.max_model_size_mb < 20:
+            # Severe size constraint
+            selected = "MobileNetV3-Small"
+            why.append("Strict model size constraint (< 20MB) requires lightweight architecture")
+            why.append(f"Dataset capacity ceiling is {capacity.value}, which permits lightweight models")
+    
+            risks.append(Risk(
+                severity=RiskSeverity.MEDIUM,
+                description="Lightweight model may underfit high-complexity datasets",
+                mitigation="Monitor validation metrics and consider knowledge distillation"
+            ))
+    
+            tradeoffs.append(Tradeoff(
+                aspect="model_size",
+                gain="Fits deployment constraint",
+                cost="Reduced representational capacity"
+            ))
+    
+            provenance_id = "R-MODEL-SIZE-LT-20"
+            alternatives.append(Alternative(
+                option="MobileNetV3-Large",
+                rejected_because="Exceeds model size constraint",
+                score=0.4
+            ))
+    
+        elif capacity == CapacityCeiling.LIGHTWEIGHT:
+            selected = "MobileNetV3"
+            why.append("Signal profile indicates lightweight model is sufficient")
+            why.append(f"Information density is {signal.information_density.value}")
+    
+            risks.append(Risk(
+                severity=RiskSeverity.LOW,
+                description="May need capacity increase if dataset grows in complexity"
+            ))
+    
+            provenance_id = "R-MODEL-CAP-LW"
+            alternatives.append(Alternative(
+                option="EfficientNetB0",
+                rejected_because="More capacity than needed based on signal analysis",
+                score=0.6
+            ))
+    
+        elif capacity == CapacityCeiling.STANDARD:
+            if intent.deployment_target in (DeploymentTarget.EDGE, DeploymentTarget.MOBILE):
+                selected = "EfficientNetB1"
+                why.append("Standard capacity needed, edge deployment requires efficiency")
+            else:
+                selected = "ResNet50"
+>               why.append("Standard capacity, cloud deployment permits larger models")
+E               NameError: name 'why' is not defined
+
+src\imgshape\decision_v4.py:337: NameError
+__________________ TestDecisionEngine.test_risks_are_tracked __________________
+
+self = <v4_test.TestDecisionEngine object at 0x0000024C4074A1E0>
+temp_dataset = WindowsPath('C:/Users/stifl/AppData/Local/Temp/tmp0xxhhhgj/test_dataset')
+user_intent = UserIntent(task=<TaskType.CLASSIFICATION: 'classification'>, deployment_target=<DeploymentTarget.CLOUD: 'cloud'>, priority=<Priority.BALANCED: 'balanced'>)
+
+    def test_risks_are_tracked(self, temp_dataset, user_intent):
+        """Test risks are properly tracked"""
+        extractor = FingerprintExtractor()
+        fingerprint = extractor.extract(temp_dataset)
+    
+        engine = DecisionEngine()
+>       decisions = engine.decide(fingerprint, user_intent)
+
+tests\v4_test.py:286: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+src\imgshape\decision_v4.py:219: in decide
+    model_family = self._decide_model_family(fingerprint, intent, constraints)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <imgshape.decision_v4.DecisionEngine object at 0x0000024C40812BA0>
+fingerprint = DatasetFingerprint(schema_version='4.1', dataset_uri='imgshape://vision/synthetic/structured', profiles={'spatial': Sp...nthetic.structured', confidence=0.9, metadata={'sample_count': 10, 'imgshape_version': '4.1.0', 'acceleration': 'gpu'})
+intent = UserIntent(task=<TaskType.CLASSIFICATION: 'classification'>, deployment_target=<DeploymentTarget.CLOUD: 'cloud'>, priority=<Priority.BALANCED: 'balanced'>)
+constraints = UserConstraints(max_model_size_mb=None, max_inference_time_ms=None, available_memory_mb=None)
+
+    def _decide_model_family(
+        self,
+        fingerprint: DatasetFingerprint,
+        intent: UserIntent,
+        constraints: UserConstraints
+    ) -> Decision:
+        """Decide on model family"""
+    
+        semantic = fingerprint.profiles['semantic']
+        signal = fingerprint.profiles['signal']
+    
+        alternatives = []
+        provenance_id = "BASE"
+    
+        # Primary rule: capacity ceiling gates model choice
+        capacity = signal.capacity_ceiling
+    
+        if constraints.max_model_size_mb and constraints.max_model_size_mb < 20:
+            # Severe size constraint
+            selected = "MobileNetV3-Small"
+            why.append("Strict model size constraint (< 20MB) requires lightweight architecture")
+            why.append(f"Dataset capacity ceiling is {capacity.value}, which permits lightweight models")
+    
+            risks.append(Risk(
+                severity=RiskSeverity.MEDIUM,
+                description="Lightweight model may underfit high-complexity datasets",
+                mitigation="Monitor validation metrics and consider knowledge distillation"
+            ))
+    
+            tradeoffs.append(Tradeoff(
+                aspect="model_size",
+                gain="Fits deployment constraint",
+                cost="Reduced representational capacity"
+            ))
+    
+            provenance_id = "R-MODEL-SIZE-LT-20"
+            alternatives.append(Alternative(
+                option="MobileNetV3-Large",
+                rejected_because="Exceeds model size constraint",
+                score=0.4
+            ))
+    
+        elif capacity == CapacityCeiling.LIGHTWEIGHT:
+            selected = "MobileNetV3"
+            why.append("Signal profile indicates lightweight model is sufficient")
+            why.append(f"Information density is {signal.information_density.value}")
+    
+            risks.append(Risk(
+                severity=RiskSeverity.LOW,
+                description="May need capacity increase if dataset grows in complexity"
+            ))
+    
+            provenance_id = "R-MODEL-CAP-LW"
+            alternatives.append(Alternative(
+                option="EfficientNetB0",
+                rejected_because="More capacity than needed based on signal analysis",
+                score=0.6
+            ))
+    
+        elif capacity == CapacityCeiling.STANDARD:
+            if intent.deployment_target in (DeploymentTarget.EDGE, DeploymentTarget.MOBILE):
+                selected = "EfficientNetB1"
+                why.append("Standard capacity needed, edge deployment requires efficiency")
+            else:
+                selected = "ResNet50"
+>               why.append("Standard capacity, cloud deployment permits larger models")
+E               NameError: name 'why' is not defined
+
+src\imgshape\decision_v4.py:337: NameError
+__________________ TestDecisionEngine.test_decisions_to_dict __________________
+
+self = <v4_test.TestDecisionEngine object at 0x0000024C4074A330>
+temp_dataset = WindowsPath('C:/Users/stifl/AppData/Local/Temp/tmpbjjxuir0/test_dataset')
+user_intent = UserIntent(task=<TaskType.CLASSIFICATION: 'classification'>, deployment_target=<DeploymentTarget.CLOUD: 'cloud'>, priority=<Priority.BALANCED: 'balanced'>)
+
+    def test_decisions_to_dict(self, temp_dataset, user_intent):
+        """Test decisions collection serialization"""
+        extractor = FingerprintExtractor()
+        fingerprint = extractor.extract(temp_dataset)
+    
+        engine = DecisionEngine()
+>       decisions = engine.decide(fingerprint, user_intent)
+
+tests\v4_test.py:308: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+src\imgshape\decision_v4.py:219: in decide
+    model_family = self._decide_model_family(fingerprint, intent, constraints)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <imgshape.decision_v4.DecisionEngine object at 0x0000024C40812180>
+fingerprint = DatasetFingerprint(schema_version='4.1', dataset_uri='imgshape://vision/synthetic/structured', profiles={'spatial': Sp...nthetic.structured', confidence=0.9, metadata={'sample_count': 10, 'imgshape_version': '4.1.0', 'acceleration': 'gpu'})
+intent = UserIntent(task=<TaskType.CLASSIFICATION: 'classification'>, deployment_target=<DeploymentTarget.CLOUD: 'cloud'>, priority=<Priority.BALANCED: 'balanced'>)
+constraints = UserConstraints(max_model_size_mb=None, max_inference_time_ms=None, available_memory_mb=None)
+
+    def _decide_model_family(
+        self,
+        fingerprint: DatasetFingerprint,
+        intent: UserIntent,
+        constraints: UserConstraints
+    ) -> Decision:
+        """Decide on model family"""
+    
+        semantic = fingerprint.profiles['semantic']
+        signal = fingerprint.profiles['signal']
+    
+        alternatives = []
+        provenance_id = "BASE"
+    
+        # Primary rule: capacity ceiling gates model choice
+        capacity = signal.capacity_ceiling
+    
+        if constraints.max_model_size_mb and constraints.max_model_size_mb < 20:
+            # Severe size constraint
+            selected = "MobileNetV3-Small"
+            why.append("Strict model size constraint (< 20MB) requires lightweight architecture")
+            why.append(f"Dataset capacity ceiling is {capacity.value}, which permits lightweight models")
+    
+            risks.append(Risk(
+                severity=RiskSeverity.MEDIUM,
+                description="Lightweight model may underfit high-complexity datasets",
+                mitigation="Monitor validation metrics and consider knowledge distillation"
+            ))
+    
+            tradeoffs.append(Tradeoff(
+                aspect="model_size",
+                gain="Fits deployment constraint",
+                cost="Reduced representational capacity"
+            ))
+    
+            provenance_id = "R-MODEL-SIZE-LT-20"
+            alternatives.append(Alternative(
+                option="MobileNetV3-Large",
+                rejected_because="Exceeds model size constraint",
+                score=0.4
+            ))
+    
+        elif capacity == CapacityCeiling.LIGHTWEIGHT:
+            selected = "MobileNetV3"
+            why.append("Signal profile indicates lightweight model is sufficient")
+            why.append(f"Information density is {signal.information_density.value}")
+    
+            risks.append(Risk(
+                severity=RiskSeverity.LOW,
+                description="May need capacity increase if dataset grows in complexity"
+            ))
+    
+            provenance_id = "R-MODEL-CAP-LW"
+            alternatives.append(Alternative(
+                option="EfficientNetB0",
+                rejected_because="More capacity than needed based on signal analysis",
+                score=0.6
+            ))
+    
+        elif capacity == CapacityCeiling.STANDARD:
+            if intent.deployment_target in (DeploymentTarget.EDGE, DeploymentTarget.MOBILE):
+                selected = "EfficientNetB1"
+                why.append("Standard capacity needed, edge deployment requires efficiency")
+            else:
+                selected = "ResNet50"
+>               why.append("Standard capacity, cloud deployment permits larger models")
+E               NameError: name 'why' is not defined
+
+src\imgshape\decision_v4.py:337: NameError
+_____________________ TestAtlas.test_extract_fingerprint ______________________
+
+self = <v4_test.TestAtlas object at 0x0000024C4074AAB0>
+temp_dataset = WindowsPath('C:/Users/stifl/AppData/Local/Temp/tmp4zmkwodp/test_dataset')
+
+    def test_extract_fingerprint(self, temp_dataset):
+        """Test Atlas fingerprint extraction"""
+        atlas = Atlas()
+        fingerprint = atlas.extract_fingerprint(temp_dataset)
+    
+        assert isinstance(fingerprint, DatasetFingerprint)
+>       assert fingerprint.schema_version == "4.0"
+E       AssertionError: assert '4.1' == '4.0'
+E         
+E         - 4.0
+E         + 4.1
+
+tests\v4_test.py:411: AssertionError
+__________________ TestAtlas.test_full_pipeline_via_analyze ___________________
+
+self = <v4_test.TestAtlas object at 0x0000024C4074A510>
+temp_dataset = WindowsPath('C:/Users/stifl/AppData/Local/Temp/tmp8ldf69k2/test_dataset')
+user_intent = UserIntent(task=<TaskType.CLASSIFICATION: 'classification'>, deployment_target=<DeploymentTarget.CLOUD: 'cloud'>, priority=<Priority.BALANCED: 'balanced'>)
+
+    def test_full_pipeline_via_analyze(self, temp_dataset, user_intent):
+        """Test Atlas.analyze() method for full pipeline"""
+        atlas = Atlas()
+    
+        with tempfile.TemporaryDirectory() as output_dir:
+>           result = atlas.analyze(temp_dataset, user_intent, Path(output_dir))
+
+tests\v4_test.py:418: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+src\imgshape\atlas.py:93: in analyze
+    decisions = self.engine.decide(fingerprint, user_intent, constraints)
+src\imgshape\decision_v4.py:219: in decide
+    model_family = self._decide_model_family(fingerprint, intent, constraints)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <imgshape.decision_v4.DecisionEngine object at 0x0000024C408128A0>
+fingerprint = DatasetFingerprint(schema_version='4.1', dataset_uri='imgshape://vision/synthetic/structured', profiles={'spatial': Sp...nthetic.structured', confidence=0.9, metadata={'sample_count': 10, 'imgshape_version': '4.1.0', 'acceleration': 'gpu'})
+intent = UserIntent(task=<TaskType.CLASSIFICATION: 'classification'>, deployment_target=<DeploymentTarget.CLOUD: 'cloud'>, priority=<Priority.BALANCED: 'balanced'>)
+constraints = UserConstraints(max_model_size_mb=None, max_inference_time_ms=None, available_memory_mb=None)
+
+    def _decide_model_family(
+        self,
+        fingerprint: DatasetFingerprint,
+        intent: UserIntent,
+        constraints: UserConstraints
+    ) -> Decision:
+        """Decide on model family"""
+    
+        semantic = fingerprint.profiles['semantic']
+        signal = fingerprint.profiles['signal']
+    
+        alternatives = []
+        provenance_id = "BASE"
+    
+        # Primary rule: capacity ceiling gates model choice
+        capacity = signal.capacity_ceiling
+    
+        if constraints.max_model_size_mb and constraints.max_model_size_mb < 20:
+            # Severe size constraint
+            selected = "MobileNetV3-Small"
+            why.append("Strict model size constraint (< 20MB) requires lightweight architecture")
+            why.append(f"Dataset capacity ceiling is {capacity.value}, which permits lightweight models")
+    
+            risks.append(Risk(
+                severity=RiskSeverity.MEDIUM,
+                description="Lightweight model may underfit high-complexity datasets",
+                mitigation="Monitor validation metrics and consider knowledge distillation"
+            ))
+    
+            tradeoffs.append(Tradeoff(
+                aspect="model_size",
+                gain="Fits deployment constraint",
+                cost="Reduced representational capacity"
+            ))
+    
+            provenance_id = "R-MODEL-SIZE-LT-20"
+            alternatives.append(Alternative(
+                option="MobileNetV3-Large",
+                rejected_because="Exceeds model size constraint",
+                score=0.4
+            ))
+    
+        elif capacity == CapacityCeiling.LIGHTWEIGHT:
+            selected = "MobileNetV3"
+            why.append("Signal profile indicates lightweight model is sufficient")
+            why.append(f"Information density is {signal.information_density.value}")
+    
+            risks.append(Risk(
+                severity=RiskSeverity.LOW,
+                description="May need capacity increase if dataset grows in complexity"
+            ))
+    
+            provenance_id = "R-MODEL-CAP-LW"
+            alternatives.append(Alternative(
+                option="EfficientNetB0",
+                rejected_because="More capacity than needed based on signal analysis",
+                score=0.6
+            ))
+    
+        elif capacity == CapacityCeiling.STANDARD:
+            if intent.deployment_target in (DeploymentTarget.EDGE, DeploymentTarget.MOBILE):
+                selected = "EfficientNetB1"
+                why.append("Standard capacity needed, edge deployment requires efficiency")
+            else:
+                selected = "ResNet50"
+>               why.append("Standard capacity, cloud deployment permits larger models")
+E               NameError: name 'why' is not defined
+
+src\imgshape\decision_v4.py:337: NameError
+------------------------------ Captured log call ------------------------------
+WARNING  imgshape.atlas:atlas.py:142 Fingerprint validation failed: Validation failed for fingerprint:
+  - Invalid schema_version: 4.1 (expected 4.0)
+________________________ TestAtlas.test_full_analysis _________________________
+
+self = <v4_test.TestAtlas object at 0x0000024C40749D60>
+temp_dataset = WindowsPath('C:/Users/stifl/AppData/Local/Temp/tmp61to3nwy/test_dataset')
+user_intent = UserIntent(task=<TaskType.CLASSIFICATION: 'classification'>, deployment_target=<DeploymentTarget.CLOUD: 'cloud'>, priority=<Priority.BALANCED: 'balanced'>)
+
+    def test_full_analysis(self, temp_dataset, user_intent):
+        """Test complete Atlas analysis pipeline"""
+        with tempfile.TemporaryDirectory() as output_dir:
+            atlas = Atlas(validate=False)  # Skip validation
+>           result = atlas.analyze(
+                temp_dataset,
+                user_intent,
+                Path(output_dir)
+            )
+
+tests\v4_test.py:429: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+src\imgshape\atlas.py:93: in analyze
+    decisions = self.engine.decide(fingerprint, user_intent, constraints)
+src\imgshape\decision_v4.py:219: in decide
+    model_family = self._decide_model_family(fingerprint, intent, constraints)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <imgshape.decision_v4.DecisionEngine object at 0x0000024C4083C290>
+fingerprint = DatasetFingerprint(schema_version='4.1', dataset_uri='imgshape://vision/synthetic/structured', profiles={'spatial': Sp...nthetic.structured', confidence=0.9, metadata={'sample_count': 10, 'imgshape_version': '4.1.0', 'acceleration': 'gpu'})
+intent = UserIntent(task=<TaskType.CLASSIFICATION: 'classification'>, deployment_target=<DeploymentTarget.CLOUD: 'cloud'>, priority=<Priority.BALANCED: 'balanced'>)
+constraints = UserConstraints(max_model_size_mb=None, max_inference_time_ms=None, available_memory_mb=None)
+
+    def _decide_model_family(
+        self,
+        fingerprint: DatasetFingerprint,
+        intent: UserIntent,
+        constraints: UserConstraints
+    ) -> Decision:
+        """Decide on model family"""
+    
+        semantic = fingerprint.profiles['semantic']
+        signal = fingerprint.profiles['signal']
+    
+        alternatives = []
+        provenance_id = "BASE"
+    
+        # Primary rule: capacity ceiling gates model choice
+        capacity = signal.capacity_ceiling
+    
+        if constraints.max_model_size_mb and constraints.max_model_size_mb < 20:
+            # Severe size constraint
+            selected = "MobileNetV3-Small"
+            why.append("Strict model size constraint (< 20MB) requires lightweight architecture")
+            why.append(f"Dataset capacity ceiling is {capacity.value}, which permits lightweight models")
+    
+            risks.append(Risk(
+                severity=RiskSeverity.MEDIUM,
+                description="Lightweight model may underfit high-complexity datasets",
+                mitigation="Monitor validation metrics and consider knowledge distillation"
+            ))
+    
+            tradeoffs.append(Tradeoff(
+                aspect="model_size",
+                gain="Fits deployment constraint",
+                cost="Reduced representational capacity"
+            ))
+    
+            provenance_id = "R-MODEL-SIZE-LT-20"
+            alternatives.append(Alternative(
+                option="MobileNetV3-Large",
+                rejected_because="Exceeds model size constraint",
+                score=0.4
+            ))
+    
+        elif capacity == CapacityCeiling.LIGHTWEIGHT:
+            selected = "MobileNetV3"
+            why.append("Signal profile indicates lightweight model is sufficient")
+            why.append(f"Information density is {signal.information_density.value}")
+    
+            risks.append(Risk(
+                severity=RiskSeverity.LOW,
+                description="May need capacity increase if dataset grows in complexity"
+            ))
+    
+            provenance_id = "R-MODEL-CAP-LW"
+            alternatives.append(Alternative(
+                option="EfficientNetB0",
+                rejected_because="More capacity than needed based on signal analysis",
+                score=0.6
+            ))
+    
+        elif capacity == CapacityCeiling.STANDARD:
+            if intent.deployment_target in (DeploymentTarget.EDGE, DeploymentTarget.MOBILE):
+                selected = "EfficientNetB1"
+                why.append("Standard capacity needed, edge deployment requires efficiency")
+            else:
+                selected = "ResNet50"
+>               why.append("Standard capacity, cloud deployment permits larger models")
+E               NameError: name 'why' is not defined
+
+src\imgshape\decision_v4.py:337: NameError
+___________________ TestIntegration.test_complete_pipeline ____________________
+
+self = <v4_test.TestIntegration object at 0x0000024C40749310>
+temp_dataset = WindowsPath('C:/Users/stifl/AppData/Local/Temp/tmp8m4zbvpa/test_dataset')
+
+    def test_complete_pipeline(self, temp_dataset):
+        """Test complete pipeline from fingerprint to artifacts"""
+        intent = UserIntent(
+            task=TaskType.CLASSIFICATION,
+            deployment_target=DeploymentTarget.CLOUD,
+            priority=Priority.ACCURACY
+        )
+    
+        with tempfile.TemporaryDirectory() as output_dir:
+            atlas = Atlas(validate=False)
+>           result = atlas.analyze(temp_dataset, intent, Path(output_dir))
+
+tests\v4_test.py:458: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+src\imgshape\atlas.py:93: in analyze
+    decisions = self.engine.decide(fingerprint, user_intent, constraints)
+src\imgshape\decision_v4.py:219: in decide
+    model_family = self._decide_model_family(fingerprint, intent, constraints)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <imgshape.decision_v4.DecisionEngine object at 0x0000024C4083D790>
+fingerprint = DatasetFingerprint(schema_version='4.1', dataset_uri='imgshape://vision/synthetic/structured', profiles={'spatial': Sp...nthetic.structured', confidence=0.9, metadata={'sample_count': 10, 'imgshape_version': '4.1.0', 'acceleration': 'gpu'})
+intent = UserIntent(task=<TaskType.CLASSIFICATION: 'classification'>, deployment_target=<DeploymentTarget.CLOUD: 'cloud'>, priority=<Priority.ACCURACY: 'accuracy'>)
+constraints = UserConstraints(max_model_size_mb=None, max_inference_time_ms=None, available_memory_mb=None)
+
+    def _decide_model_family(
+        self,
+        fingerprint: DatasetFingerprint,
+        intent: UserIntent,
+        constraints: UserConstraints
+    ) -> Decision:
+        """Decide on model family"""
+    
+        semantic = fingerprint.profiles['semantic']
+        signal = fingerprint.profiles['signal']
+    
+        alternatives = []
+        provenance_id = "BASE"
+    
+        # Primary rule: capacity ceiling gates model choice
+        capacity = signal.capacity_ceiling
+    
+        if constraints.max_model_size_mb and constraints.max_model_size_mb < 20:
+            # Severe size constraint
+            selected = "MobileNetV3-Small"
+            why.append("Strict model size constraint (< 20MB) requires lightweight architecture")
+            why.append(f"Dataset capacity ceiling is {capacity.value}, which permits lightweight models")
+    
+            risks.append(Risk(
+                severity=RiskSeverity.MEDIUM,
+                description="Lightweight model may underfit high-complexity datasets",
+                mitigation="Monitor validation metrics and consider knowledge distillation"
+            ))
+    
+            tradeoffs.append(Tradeoff(
+                aspect="model_size",
+                gain="Fits deployment constraint",
+                cost="Reduced representational capacity"
+            ))
+    
+            provenance_id = "R-MODEL-SIZE-LT-20"
+            alternatives.append(Alternative(
+                option="MobileNetV3-Large",
+                rejected_because="Exceeds model size constraint",
+                score=0.4
+            ))
+    
+        elif capacity == CapacityCeiling.LIGHTWEIGHT:
+            selected = "MobileNetV3"
+            why.append("Signal profile indicates lightweight model is sufficient")
+            why.append(f"Information density is {signal.information_density.value}")
+    
+            risks.append(Risk(
+                severity=RiskSeverity.LOW,
+                description="May need capacity increase if dataset grows in complexity"
+            ))
+    
+            provenance_id = "R-MODEL-CAP-LW"
+            alternatives.append(Alternative(
+                option="EfficientNetB0",
+                rejected_because="More capacity than needed based on signal analysis",
+                score=0.6
+            ))
+    
+        elif capacity == CapacityCeiling.STANDARD:
+            if intent.deployment_target in (DeploymentTarget.EDGE, DeploymentTarget.MOBILE):
+                selected = "EfficientNetB1"
+                why.append("Standard capacity needed, edge deployment requires efficiency")
+            else:
+                selected = "ResNet50"
+>               why.append("Standard capacity, cloud deployment permits larger models")
+E               NameError: name 'why' is not defined
+
+src\imgshape\decision_v4.py:337: NameError
+__________________ TestIntegration.test_different_priorities __________________
+
+self = <v4_test.TestIntegration object at 0x0000024C4074B710>
+temp_dataset = WindowsPath('C:/Users/stifl/AppData/Local/Temp/tmp0_ow2ghq/test_dataset')
+
+    def test_different_priorities(self, temp_dataset):
+        """Test different optimization priorities"""
+        priorities = [Priority.ACCURACY, Priority.SPEED, Priority.SIZE, Priority.BALANCED]
+    
+        for priority in priorities:
+            intent = UserIntent(
+                task=TaskType.CLASSIFICATION,
+                deployment_target=DeploymentTarget.CLOUD,
+                priority=priority
+            )
+    
+            with tempfile.TemporaryDirectory() as output_dir:
+                atlas = Atlas(validate=False)
+>               result = atlas.analyze(temp_dataset, intent, Path(output_dir))
+
+tests\v4_test.py:490: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+src\imgshape\atlas.py:93: in analyze
+    decisions = self.engine.decide(fingerprint, user_intent, constraints)
+src\imgshape\decision_v4.py:219: in decide
+    model_family = self._decide_model_family(fingerprint, intent, constraints)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <imgshape.decision_v4.DecisionEngine object at 0x0000024C34176960>
+fingerprint = DatasetFingerprint(schema_version='4.1', dataset_uri='imgshape://vision/synthetic/structured', profiles={'spatial': Sp...nthetic.structured', confidence=0.9, metadata={'sample_count': 10, 'imgshape_version': '4.1.0', 'acceleration': 'gpu'})
+intent = UserIntent(task=<TaskType.CLASSIFICATION: 'classification'>, deployment_target=<DeploymentTarget.CLOUD: 'cloud'>, priority=<Priority.ACCURACY: 'accuracy'>)
+constraints = UserConstraints(max_model_size_mb=None, max_inference_time_ms=None, available_memory_mb=None)
+
+    def _decide_model_family(
+        self,
+        fingerprint: DatasetFingerprint,
+        intent: UserIntent,
+        constraints: UserConstraints
+    ) -> Decision:
+        """Decide on model family"""
+    
+        semantic = fingerprint.profiles['semantic']
+        signal = fingerprint.profiles['signal']
+    
+        alternatives = []
+        provenance_id = "BASE"
+    
+        # Primary rule: capacity ceiling gates model choice
+        capacity = signal.capacity_ceiling
+    
+        if constraints.max_model_size_mb and constraints.max_model_size_mb < 20:
+            # Severe size constraint
+            selected = "MobileNetV3-Small"
+            why.append("Strict model size constraint (< 20MB) requires lightweight architecture")
+            why.append(f"Dataset capacity ceiling is {capacity.value}, which permits lightweight models")
+    
+            risks.append(Risk(
+                severity=RiskSeverity.MEDIUM,
+                description="Lightweight model may underfit high-complexity datasets",
+                mitigation="Monitor validation metrics and consider knowledge distillation"
+            ))
+    
+            tradeoffs.append(Tradeoff(
+                aspect="model_size",
+                gain="Fits deployment constraint",
+                cost="Reduced representational capacity"
+            ))
+    
+            provenance_id = "R-MODEL-SIZE-LT-20"
+            alternatives.append(Alternative(
+                option="MobileNetV3-Large",
+                rejected_because="Exceeds model size constraint",
+                score=0.4
+            ))
+    
+        elif capacity == CapacityCeiling.LIGHTWEIGHT:
+            selected = "MobileNetV3"
+            why.append("Signal profile indicates lightweight model is sufficient")
+            why.append(f"Information density is {signal.information_density.value}")
+    
+            risks.append(Risk(
+                severity=RiskSeverity.LOW,
+                description="May need capacity increase if dataset grows in complexity"
+            ))
+    
+            provenance_id = "R-MODEL-CAP-LW"
+            alternatives.append(Alternative(
+                option="EfficientNetB0",
+                rejected_because="More capacity than needed based on signal analysis",
+                score=0.6
+            ))
+    
+        elif capacity == CapacityCeiling.STANDARD:
+            if intent.deployment_target in (DeploymentTarget.EDGE, DeploymentTarget.MOBILE):
+                selected = "EfficientNetB1"
+                why.append("Standard capacity needed, edge deployment requires efficiency")
+            else:
+                selected = "ResNet50"
+>               why.append("Standard capacity, cloud deployment permits larger models")
+E               NameError: name 'why' is not defined
+
+src\imgshape\decision_v4.py:337: NameError
+______________ TestIntegration.test_different_deployment_targets ______________
+
+self = <v4_test.TestIntegration object at 0x0000024C4074BB30>
+temp_dataset = WindowsPath('C:/Users/stifl/AppData/Local/Temp/tmpcporrotw/test_dataset')
+
+    def test_different_deployment_targets(self, temp_dataset):
+        """Test different deployment targets"""
+        targets = [DeploymentTarget.CLOUD, DeploymentTarget.EDGE,
+                   DeploymentTarget.MOBILE, DeploymentTarget.EMBEDDED]
+    
+        for target in targets:
+            intent = UserIntent(
+                task=TaskType.CLASSIFICATION,
+                deployment_target=target,
+                priority=Priority.BALANCED
+            )
+    
+            with tempfile.TemporaryDirectory() as output_dir:
+                atlas = Atlas(validate=False)
+>               result = atlas.analyze(temp_dataset, intent, Path(output_dir))
+
+tests\v4_test.py:513: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+src\imgshape\atlas.py:93: in analyze
+    decisions = self.engine.decide(fingerprint, user_intent, constraints)
+src\imgshape\decision_v4.py:219: in decide
+    model_family = self._decide_model_family(fingerprint, intent, constraints)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <imgshape.decision_v4.DecisionEngine object at 0x0000024C4083E4E0>
+fingerprint = DatasetFingerprint(schema_version='4.1', dataset_uri='imgshape://vision/synthetic/structured', profiles={'spatial': Sp...nthetic.structured', confidence=0.9, metadata={'sample_count': 10, 'imgshape_version': '4.1.0', 'acceleration': 'gpu'})
+intent = UserIntent(task=<TaskType.CLASSIFICATION: 'classification'>, deployment_target=<DeploymentTarget.CLOUD: 'cloud'>, priority=<Priority.BALANCED: 'balanced'>)
+constraints = UserConstraints(max_model_size_mb=None, max_inference_time_ms=None, available_memory_mb=None)
+
+    def _decide_model_family(
+        self,
+        fingerprint: DatasetFingerprint,
+        intent: UserIntent,
+        constraints: UserConstraints
+    ) -> Decision:
+        """Decide on model family"""
+    
+        semantic = fingerprint.profiles['semantic']
+        signal = fingerprint.profiles['signal']
+    
+        alternatives = []
+        provenance_id = "BASE"
+    
+        # Primary rule: capacity ceiling gates model choice
+        capacity = signal.capacity_ceiling
+    
+        if constraints.max_model_size_mb and constraints.max_model_size_mb < 20:
+            # Severe size constraint
+            selected = "MobileNetV3-Small"
+            why.append("Strict model size constraint (< 20MB) requires lightweight architecture")
+            why.append(f"Dataset capacity ceiling is {capacity.value}, which permits lightweight models")
+    
+            risks.append(Risk(
+                severity=RiskSeverity.MEDIUM,
+                description="Lightweight model may underfit high-complexity datasets",
+                mitigation="Monitor validation metrics and consider knowledge distillation"
+            ))
+    
+            tradeoffs.append(Tradeoff(
+                aspect="model_size",
+                gain="Fits deployment constraint",
+                cost="Reduced representational capacity"
+            ))
+    
+            provenance_id = "R-MODEL-SIZE-LT-20"
+            alternatives.append(Alternative(
+                option="MobileNetV3-Large",
+                rejected_because="Exceeds model size constraint",
+                score=0.4
+            ))
+    
+        elif capacity == CapacityCeiling.LIGHTWEIGHT:
+            selected = "MobileNetV3"
+            why.append("Signal profile indicates lightweight model is sufficient")
+            why.append(f"Information density is {signal.information_density.value}")
+    
+            risks.append(Risk(
+                severity=RiskSeverity.LOW,
+                description="May need capacity increase if dataset grows in complexity"
+            ))
+    
+            provenance_id = "R-MODEL-CAP-LW"
+            alternatives.append(Alternative(
+                option="EfficientNetB0",
+                rejected_because="More capacity than needed based on signal analysis",
+                score=0.6
+            ))
+    
+        elif capacity == CapacityCeiling.STANDARD:
+            if intent.deployment_target in (DeploymentTarget.EDGE, DeploymentTarget.MOBILE):
+                selected = "EfficientNetB1"
+                why.append("Standard capacity needed, edge deployment requires efficiency")
+            else:
+                selected = "ResNet50"
+>               why.append("Standard capacity, cloud deployment permits larger models")
+E               NameError: name 'why' is not defined
+
+src\imgshape\decision_v4.py:337: NameError
+=========================== short test summary info ===========================
+FAILED tests/v4_test.py::TestFingerprintExtractor::test_extract_fingerprint
+FAILED tests/v4_test.py::TestDecisionEngine::test_make_decisions - NameError:...
+FAILED tests/v4_test.py::TestDecisionEngine::test_decision_domains - NameErro...
+FAILED tests/v4_test.py::TestDecisionEngine::test_decision_has_rationale - Na...
+FAILED tests/v4_test.py::TestDecisionEngine::test_decision_with_constraints
+FAILED tests/v4_test.py::TestDecisionEngine::test_risks_are_tracked - NameErr...
+FAILED tests/v4_test.py::TestDecisionEngine::test_decisions_to_dict - NameErr...
+FAILED tests/v4_test.py::TestAtlas::test_extract_fingerprint - AssertionError...
+FAILED tests/v4_test.py::TestAtlas::test_full_pipeline_via_analyze - NameErro...
+FAILED tests/v4_test.py::TestAtlas::test_full_analysis - NameError: name 'why...
+FAILED tests/v4_test.py::TestIntegration::test_complete_pipeline - NameError:...
+FAILED tests/v4_test.py::TestIntegration::test_different_priorities - NameErr...
+FAILED tests/v4_test.py::TestIntegration::test_different_deployment_targets
+================== 13 failed, 13 passed, 7 skipped in 11.39s ==================

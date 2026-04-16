@@ -1,0 +1,19 @@
+{
+  "tasks": [
+    {
+      "id": "task1",
+      "title": "Implement MedicalProfile",
+      "status": "completed"
+    },
+    {
+      "id": "task2",
+      "title": "Implement SatelliteProfile",
+      "status": "completed"
+    },
+    {
+      "id": "task3",
+      "title": "Implement OCRProfile",
+      "status": "completed"
+    }
+  ]
+}

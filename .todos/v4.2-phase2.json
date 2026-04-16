@@ -1,0 +1,19 @@
+{
+  "tasks": [
+    {
+      "id": "task1",
+      "title": "Semantic Embedding Extraction",
+      "status": "completed"
+    },
+    {
+      "id": "task2",
+      "title": "Calculate Semantic Drift",
+      "status": "completed"
+    },
+    {
+      "id": "task3",
+      "title": "Update Fingerprint Schema and Report",
+      "status": "pending"
+    }
+  ]
+}

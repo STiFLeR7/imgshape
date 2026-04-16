@@ -1,0 +1,19 @@
+{
+  "tasks": [
+    {
+      "id": "task1",
+      "title": "Create BatchedGPUHandler",
+      "status": "completed"
+    },
+    {
+      "id": "task2",
+      "title": "Implement Batched Entropy and Blur Kernels",
+      "status": "completed"
+    },
+    {
+      "id": "task3",
+      "title": "Integrate BatchedGPUHandler into Atlas",
+      "status": "completed"
+    }
+  ]
+}

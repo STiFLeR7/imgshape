@@ -56,7 +56,7 @@ except ImportError:
     # logger may not be initialized yet; set flag only
     V4_AVAILABLE = False
 
-__version__ = "4.1.0"
+__version__ = "4.2.0"
 
 # -------------------------
 # Configuration (env-driven)
@@ -98,8 +98,8 @@ logging.getLogger("streamlit").setLevel(logging.ERROR)
 # FastAPI app & middleware
 # -------------------------
 app = FastAPI(
-    title="imgshape API",
-    description="FastAPI wrapper for imgshape — analyze, recommend, and compatibility (archive-safe)",
+    title="imgshape Atlas Bento",
+    description="FastAPI wrapper for imgshape v4.2.0 (Bento Intelligence)",
     version=__version__,
 )
 
@@ -1178,8 +1178,8 @@ def v4_info():
     
     return JSONResponse({
         "available": True,
-        "version": "4.1.0",
-        "codename": "Atlas Reinforcement",
+        "version": "4.2.0",
+        "codename": "Bento Intelligence",
         "features": [
             "deterministic_fingerprinting",
             "five_profile_system",
@@ -1253,7 +1253,8 @@ def health():
     return JSONResponse({
         "status": "healthy", 
         "version": app.version,
-        "v4_available": V4_AVAILABLE
+        "v4_available": V4_AVAILABLE,
+        "gpu_available": GPUHandler.is_cuda_available() if V4_AVAILABLE else False
     })
 
 

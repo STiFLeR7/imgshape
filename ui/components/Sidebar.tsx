@@ -1,358 +1,110 @@
-import React, { useRef } from 'react';
+import React from 'react';
 import { 
-  Upload, 
-  Search, 
-  Fingerprint, 
-  Zap, 
-  CheckCircle2,
-  Cpu,
-  Target,
-  Gauge,
-  Download,
-  Copy,
+  Settings, 
   LayoutDashboard,
   LayoutGrid,
-  FileText
+  FileText,
+  GitCompare,
+  CircleHelp
 } from 'lucide-react';
-import { AppState, V4Config, V3Config, TaskType, DeploymentTarget, Priority } from '../types';
+import { AppState } from '../types';
 import { Tooltip } from './Tooltip';
 
 interface SidebarProps {
   state: AppState;
   onStateChange: (updates: Partial<AppState>) => void;
-  onConfigV4Change: (updates: Partial<V4Config>) => void;
-  onConfigV3Change: (updates: Partial<V3Config>) => void;
-  onAnalyze: () => void;
-  onFingerprint: () => void;
-  onRecommend: () => void;
-  onDownloadJson: () => void;
-  onCopyJson: () => void;
+  onOpenSettings: () => void;
 }
 
 const Sidebar: React.FC<SidebarProps> = ({
   state,
   onStateChange,
-  onConfigV4Change,
-  onConfigV3Change,
-  onAnalyze,
-  onFingerprint,
-  onRecommend,
-  onDownloadJson,
-  onCopyJson
+  onOpenSettings
 }) => {
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      const file = e.target.files[0];
-      const url = URL.createObjectURL(file);
-      onStateChange({ file, filePreviewUrl: url, datasetPath: '' });
-    }
-  };
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      const file = e.dataTransfer.files[0];
-      const url = URL.createObjectURL(file);
-      onStateChange({ file, filePreviewUrl: url, datasetPath: '' });
-    }
-  };
-
   return (
-    <aside className="w-80 bg-surface border-r border-gray-800 flex flex-col h-[calc(100vh-64px)] overflow-y-auto custom-scrollbar">
+    <aside className="w-20 bg-slate-900 border-r border-slate-800 flex flex-col h-[calc(100vh-64px)] z-40 transition-all duration-300">
       
-      {/* Navigation Tabs */}
-      <div className="grid grid-cols-3 border-b border-gray-800">
-        <Tooltip text="Main Dashboard & Analysis" position="bottom" className="h-full">
+      {/* Navigation Icons */}
+      <div className="flex flex-col flex-1 py-6 items-center space-y-4">
+        
+        <Tooltip text="Dashboard" position="right">
           <button
              onClick={() => onStateChange({ activeView: 'dashboard' })}
-             className={`w-full py-3 flex justify-center items-center transition-colors ${state.activeView === 'dashboard' ? 'border-b-2 border-accent text-accent bg-accent/5' : 'text-gray-500 hover:text-gray-300'}`}
+             className={`p-3 rounded-xl transition-all duration-200 ${
+               state.activeView === 'dashboard' 
+               ? 'bg-emerald-500/10 text-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.1)]' 
+               : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800'
+             }`}
           >
-            <LayoutDashboard className="w-5 h-5" />
+            <LayoutDashboard className="w-6 h-6" />
+          </button>
+        </Tooltip>
+
+        <Tooltip text="Drift Analysis" position="right">
+          <button
+            onClick={() => onStateChange({ activeView: 'drift' })}
+            className={`p-3 rounded-xl transition-all duration-200 ${
+              state.activeView === 'drift' 
+              ? 'bg-blue-500/10 text-blue-400 shadow-[0_0_15px_rgba(59,130,246,0.1)]' 
+              : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800'
+            }`}
+          >
+            <GitCompare className="w-6 h-6" />
           </button>
         </Tooltip>
         
         {state.version === 'v4' && (
-          <Tooltip text="Data Augmentation Tools" position="bottom" className="h-full">
+          <Tooltip text="Augmentation" position="right">
             <button
               onClick={() => onStateChange({ activeView: 'augmentation' })}
-              className={`w-full py-3 flex justify-center items-center transition-colors ${state.activeView === 'augmentation' ? 'border-b-2 border-purple-500 text-purple-400 bg-purple-500/5' : 'text-gray-500 hover:text-gray-300'}`}
+              className={`p-3 rounded-xl transition-all duration-200 ${
+                state.activeView === 'augmentation' 
+                ? 'bg-purple-500/10 text-purple-400 shadow-[0_0_15px_rgba(168,85,247,0.1)]' 
+                : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800'
+              }`}
             >
-              <LayoutGrid className="w-5 h-5" />
+              <LayoutGrid className="w-6 h-6" />
             </button>
           </Tooltip>
         )}
         
-        <Tooltip text="Generate & View Reports" position="bottom" className="h-full">
+        <Tooltip text="Reports" position="right">
           <button
              onClick={() => onStateChange({ activeView: 'report' })}
-             className={`w-full py-3 flex justify-center items-center transition-colors ${state.activeView === 'report' ? 'border-b-2 border-pink-500 text-pink-400 bg-pink-500/5' : 'text-gray-500 hover:text-gray-300'}`}
+             className={`p-3 rounded-xl transition-all duration-200 ${
+               state.activeView === 'report' 
+               ? 'bg-pink-500/10 text-pink-400 shadow-[0_0_15px_rgba(236,72,153,0.1)]' 
+               : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800'
+             }`}
           >
-            <FileText className="w-5 h-5" />
+            <FileText className="w-6 h-6" />
           </button>
         </Tooltip>
-      </div>
 
-      <div className="p-6 space-y-6">
-        
-        {/* Version Selector */}
-        {state.activeView === 'dashboard' && (
-          <div>
-            <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">
-              API Version
-            </label>
-            <Tooltip text="Choose between v3 (Legacy) and v4 (Atlas) engines" position="right">
-              <div className="relative w-full">
-                <select
-                  value={state.version}
-                  onChange={(e) => onStateChange({ version: e.target.value as 'v3' | 'v4' })}
-                  className="w-full bg-surfaceHighlight border border-gray-700 text-white rounded-lg px-4 py-2.5 appearance-none focus:ring-2 focus:ring-accent focus:border-transparent outline-none transition-all cursor-pointer"
-                >
-                  <option value="v4">v4.0.0 (Atlas)</option>
-                  <option value="v3">v3.x (Legacy)</option>
-                </select>
-                <div className="absolute right-3 top-3 pointer-events-none text-gray-400">
-                  <Zap className="w-4 h-4" />
-                </div>
-              </div>
-            </Tooltip>
-          </div>
-        )}
+        <div className="flex-1" />
 
-        {/* Upload Zone */}
-        <Tooltip text="Upload an image to analyze its dataset properties" position="right">
-          <div 
-            className="w-full relative border-2 border-dashed border-gray-700 rounded-xl p-6 text-center hover:border-accent hover:bg-accent/5 transition-all cursor-pointer group"
-            onClick={() => fileInputRef.current?.click()}
-            onDragOver={(e) => e.preventDefault()}
-            onDrop={handleDrop}
+        <div className="h-px w-8 bg-slate-800" />
+
+        <Tooltip text="Configuration" position="right">
+          <button
+             onClick={onOpenSettings}
+             className="p-3 rounded-xl text-slate-500 hover:text-emerald-500 hover:bg-slate-800 transition-all duration-200"
           >
-            <input 
-              type="file" 
-              ref={fileInputRef} 
-              className="hidden" 
-              accept="image/png,image/jpeg" 
-              onChange={handleFileChange}
-            />
-            <div className="flex flex-col items-center space-y-2">
-              <div className="p-3 bg-surfaceHighlight rounded-full group-hover:scale-110 transition-transform">
-                <Upload className="w-6 h-6 text-accent" />
-              </div>
-              <p className="text-sm font-medium text-gray-300">
-                {state.file ? state.file.name : "Drop image or click to browse"}
-              </p>
-              {!state.file && (
-                <p className="text-xs text-gray-500">Supports JPG, PNG (Max 10MB)</p>
-              )}
-            </div>
-          </div>
+            <Settings className="w-6 h-6" />
+          </button>
         </Tooltip>
 
-        {/* Dataset Path */}
-        <div>
-          <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">
-            Or Server Dataset Path
-          </label>
-          <Tooltip text="Absolute path to the dataset on the server" position="top">
-            <input
-              type="text"
-              value={state.datasetPath}
-              onChange={(e) => onStateChange({ datasetPath: e.target.value, file: null, filePreviewUrl: null })}
-              placeholder="/mnt/data/dataset_v1"
-              className="w-full bg-surfaceHighlight border border-gray-700 text-white rounded-lg px-4 py-2 focus:ring-2 focus:ring-accent outline-none text-sm placeholder-gray-600"
-            />
-          </Tooltip>
-        </div>
-
-        <div className="h-px bg-gray-800" />
-
-        {/* Configuration Forms - Only show in Dashboard view */}
-        {state.activeView === 'dashboard' && (
-          state.version === 'v4' ? (
-            <div className="space-y-5 animate-in fade-in slide-in-from-left-4 duration-300">
-              <div>
-                <label className="flex items-center text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2 gap-2">
-                  <Target className="w-3 h-3" /> Task Type
-                </label>
-                <Tooltip text="Select the primary AI task for the dataset" position="right">
-                  <select
-                    value={state.v4Config.task}
-                    onChange={(e) => onConfigV4Change({ task: e.target.value as TaskType })}
-                    className="w-full bg-surfaceHighlight border border-gray-700 text-white rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-accent outline-none cursor-pointer"
-                  >
-                    <option value="classification">Classification</option>
-                    <option value="detection">Detection</option>
-                    <option value="segmentation">Segmentation</option>
-                    <option value="generation">Generation</option>
-                    <option value="other">Other</option>
-                  </select>
-                </Tooltip>
-              </div>
-
-              <div>
-                <label className="flex items-center text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2 gap-2">
-                  <Cpu className="w-3 h-3" /> Deployment
-                </label>
-                <Tooltip text="Target hardware environment for the model" position="right">
-                  <select
-                    value={state.v4Config.deployment}
-                    onChange={(e) => onConfigV4Change({ deployment: e.target.value as DeploymentTarget })}
-                    className="w-full bg-surfaceHighlight border border-gray-700 text-white rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-accent outline-none cursor-pointer"
-                  >
-                    <option value="cloud">Cloud (AWS/GCP)</option>
-                    <option value="edge">Edge (Jetson/RPI)</option>
-                    <option value="mobile">Mobile (iOS/Android)</option>
-                    <option value="embedded">Embedded (MCU)</option>
-                  </select>
-                </Tooltip>
-              </div>
-
-              <div>
-                <label className="flex items-center text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2 gap-2">
-                  <Gauge className="w-3 h-3" /> Priority
-                </label>
-                <div className="grid grid-cols-2 gap-2">
-                  {(['accuracy', 'speed', 'size', 'balanced'] as Priority[]).map((p) => (
-                    <Tooltip key={p} text={`Optimize for ${p}`} position="top">
-                      <button
-                        onClick={() => onConfigV4Change({ priority: p })}
-                        className={`w-full px-3 py-2 rounded-lg text-xs font-medium border transition-all ${
-                          state.v4Config.priority === p
-                            ? 'bg-accent/20 border-accent text-accent'
-                            : 'bg-surfaceHighlight border-transparent text-gray-400 hover:text-white'
-                        }`}
-                      >
-                        {p.charAt(0).toUpperCase() + p.slice(1)}
-                      </button>
-                    </Tooltip>
-                  ))}
-                </div>
-              </div>
-              
-              <div>
-                  <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2 block">
-                      Max Model Size (MB)
-                  </label>
-                  <Tooltip text="Optional limit for the generated model size" position="top">
-                    <input 
-                        type="number"
-                        min="1"
-                        placeholder="Optional (e.g. 50)"
-                        value={state.v4Config.maxModelSize || ''}
-                        onChange={(e) => onConfigV4Change({ maxModelSize: e.target.value ? parseInt(e.target.value) : undefined })}
-                        className="w-full bg-surfaceHighlight border border-gray-700 text-white rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-accent outline-none"
-                    />
-                  </Tooltip>
-              </div>
-            </div>
-          ) : (
-            <div className="space-y-4 animate-in fade-in slide-in-from-left-4 duration-300">
-              <div>
-                <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">
-                  Preferences
-                </label>
-                <Tooltip text="Comma-separated preferences (e.g. fast, accurate)" position="top">
-                  <input
-                    type="text"
-                    value={state.v3Config.prefs}
-                    onChange={(e) => onConfigV3Change({ prefs: e.target.value })}
-                    placeholder="fast, accurate"
-                    className="w-full bg-surfaceHighlight border border-gray-700 text-white rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-accent outline-none"
-                  />
-                </Tooltip>
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">
-                  Target Model
-                </label>
-                <Tooltip text="Specific model architecture to target (e.g. resnet50)" position="top">
-                  <input
-                    type="text"
-                    value={state.v3Config.model}
-                    onChange={(e) => onConfigV3Change({ model: e.target.value })}
-                    placeholder="resnet50"
-                    className="w-full bg-surfaceHighlight border border-gray-700 text-white rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-accent outline-none"
-                  />
-                </Tooltip>
-              </div>
-            </div>
-          )
-        )}
-
-        {state.activeView === 'augmentation' && (
-          <div className="text-sm text-gray-500 italic">
-            Configure augmentation parameters in the main panel.
-          </div>
-        )}
-
-        {state.activeView === 'report' && (
-          <div className="text-sm text-gray-500 italic">
-            Configure report settings in the main panel.
-          </div>
-        )}
-
+        <Tooltip text="Help & Docs" position="right">
+          <a
+             href="https://github.com/STiFLeR7/imgshape"
+             target="_blank"
+             rel="noopener noreferrer"
+             className="p-3 rounded-xl text-slate-500 hover:text-slate-300 hover:bg-slate-800 transition-all duration-200"
+          >
+            <CircleHelp className="w-6 h-6" />
+          </a>
+        </Tooltip>
       </div>
-
-      {/* Action Footer - Only for Dashboard */}
-      {state.activeView === 'dashboard' && (
-        <div className="mt-auto p-6 bg-surfaceHighlight/30 border-t border-gray-800 space-y-3">
-          <Tooltip text="Run full dataset analysis based on configuration" position="top">
-            <button
-              onClick={onAnalyze}
-              disabled={state.status === 'loading'}
-              className="w-full flex items-center justify-center space-x-2 bg-accent hover:bg-accentHover disabled:bg-gray-700 disabled:cursor-not-allowed text-white font-semibold py-3 rounded-lg shadow-lg shadow-accent/20 transition-all active:scale-[0.98]"
-            >
-              {state.status === 'loading' ? (
-                 <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-              ) : (
-                 <Search className="w-5 h-5" />
-              )}
-              <span>Start Analysis</span>
-            </button>
-          </Tooltip>
-
-          {state.version === 'v4' && (
-            <Tooltip text="Extract only the dataset fingerprint (faster)" position="top">
-              <button
-                onClick={onFingerprint}
-                disabled={state.status === 'loading'}
-                className="w-full flex items-center justify-center space-x-2 bg-surface border border-gray-700 hover:bg-gray-800 text-gray-300 font-medium py-2.5 rounded-lg transition-all"
-              >
-                <Fingerprint className="w-4 h-4" />
-                <span>Fingerprint Only</span>
-              </button>
-            </Tooltip>
-          )}
-
-          {state.version === 'v3' && (
-            <Tooltip text="Get model recommendations based on prefs" position="top">
-              <button
-                onClick={onRecommend}
-                className="w-full flex items-center justify-center space-x-2 text-gray-400 hover:text-white text-sm py-2 transition-colors"
-              >
-                <CheckCircle2 className="w-4 h-4" />
-                <span>Get Recommendations</span>
-              </button>
-            </Tooltip>
-          )}
-          
-          {state.results && (
-               <div className="flex space-x-2 pt-2 border-t border-gray-700/50 mt-2">
-                   <Tooltip text="Download results as JSON file" position="top" className="flex-1">
-                     <button onClick={onDownloadJson} className="w-full flex items-center justify-center py-2 text-xs text-gray-400 hover:text-accent bg-surfaceHighlight rounded">
-                         <Download className="w-3 h-3 mr-1" /> JSON
-                     </button>
-                   </Tooltip>
-                   <Tooltip text="Copy JSON to clipboard" position="top" className="flex-1">
-                     <button onClick={onCopyJson} className="w-full flex items-center justify-center py-2 text-xs text-gray-400 hover:text-accent bg-surfaceHighlight rounded">
-                         <Copy className="w-3 h-3 mr-1" /> Copy
-                     </button>
-                   </Tooltip>
-               </div>
-          )}
-        </div>
-      )}
     </aside>
   );
 };

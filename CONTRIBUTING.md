@@ -53,7 +53,7 @@ Before submitting a bug report:
 **Bug:** v4.analyze() crashes with IndexError on empty folders
 
 **Environment:**
-- imgshape version: 4.0.0
+- imgshape version: 4.2.0
 - Python: 3.12.0
 - OS: Ubuntu 22.04
 
@@ -470,8 +470,8 @@ We follow **Semantic Versioning** (SemVer):
 # Update CHANGELOG.md
 
 # Tag the release
-git tag -a v4.1.0 -m "Release v4.1.0 - Added video analysis"
-git push origin v4.1.0
+git tag -a v4.2.0 -m "Release v4.2.0 - Added Atlas Bento rebranding"
+git push origin v4.2.0
 
 # Build and publish
 python -m build

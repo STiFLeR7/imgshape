@@ -1,7 +1,7 @@
 """
 imgshape.v4.atlas — Main Atlas Orchestrator
 
-This is the entry point for imgshape v4.0.0 (Atlas).
+This is the entry point for imgshape v4.2.0 (Atlas Bento).
 It orchestrates the complete pipeline: fingerprint → decide → artifacts.
 
 Usage:
@@ -28,7 +28,7 @@ logger = logging.getLogger("imgshape.atlas")
 
 class Atlas:
     """
-    Main orchestrator for imgshape v4.0.0 (Atlas).
+    Main orchestrator for imgshape v4.2.0 (Atlas Bento).
     
     This class coordinates the entire pipeline:
     1. Extract dataset fingerprint
@@ -42,8 +42,10 @@ class Atlas:
     def __init__(
         self,
         sample_limit: Optional[int] = None,
-        rule_version: str = "4.0.0",
-        validate: bool = True
+        rule_version: str = "4.2.0",
+        validate: bool = True,
+        use_gpu: bool = False,
+        batch_size: int = 32
     ):
         """
         Initialize Atlas.
@@ -52,8 +54,14 @@ class Atlas:
             sample_limit: Optional limit on images to analyze
             rule_version: Version of decision rules to use
             validate: Whether to validate outputs against schemas
+            use_gpu: Whether to use GPU acceleration for fingerprinting
+            batch_size: Batch size for GPU processing
         """
-        self.extractor = FingerprintExtractor(sample_limit=sample_limit)
+        self.extractor = FingerprintExtractor(
+            sample_limit=sample_limit,
+            use_gpu=use_gpu,
+            batch_size=batch_size
+        )
         self.engine = DecisionEngine(rule_version=rule_version)
         self.comparator = DatasetComparator()
         self.validator = SchemaValidator() if validate else None
@@ -106,7 +114,7 @@ class Atlas:
             "fingerprint": fingerprint,
             "decisions": decisions,
             "artifacts": artifacts,
-            "version": "4.1.0"
+            "version": "4.2.0"
         }
 
     def compare(self, baseline_path: Path, current_path: Path) -> Dict[str, Any]:
@@ -200,7 +208,11 @@ def analyze_dataset(
     )
     
     # Run analysis
-    atlas = Atlas(sample_limit=kwargs.get('sample_limit'))
+    atlas = Atlas(
+        sample_limit=kwargs.get('sample_limit'),
+        use_gpu=kwargs.get('use_gpu', False),
+        batch_size=kwargs.get('batch_size', 32)
+    )
     return atlas.analyze(dataset_path, intent, output_dir, constraints)
 
 

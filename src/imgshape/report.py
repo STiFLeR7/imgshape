@@ -103,6 +103,14 @@ pre,code{background:#f3f4f6;padding:8px;border-radius:6px;overflow:auto}
   </div>
   {% endif %}
 
+  {% if semantic_drift %}
+  <h2>Semantic Drift</h2>
+  <div class="card">
+    <p><strong>Latent Embedding Centroid:</strong> <i>(Captured from lightweight vision model)</i></p>
+    <pre>{{ semantic_drift_json }}</pre>
+  </div>
+  {% endif %}
+
   {% if thumbnails %}
   <h2>Sample thumbnails</h2>
   <div class="img-grid">
@@ -208,6 +216,22 @@ def generate_markdown_report(dataset_path: str, out_md_path: str, analysis: Opti
     lines.append("```json")
     lines.append(json.dumps(analysis, indent=2))
     lines.append("```\n")
+    
+    # Semantic Drift (v4.1)
+    latent_emb = None
+    if "profiles" in analysis and "semantic" in analysis["profiles"]:
+        latent_emb = analysis["profiles"]["semantic"].get("latent_embedding")
+    elif "latent_embedding" in analysis:
+        latent_emb = analysis["latent_embedding"]
+        
+    if latent_emb:
+        lines.append("## Semantic Drift\n")
+        lines.append("> Centroid of semantic embeddings captured for this dataset version.\n")
+        lines.append("```json")
+        # Just show first few elements if very long
+        lines.append(json.dumps({"latent_embedding_centroid": latent_emb[:8] + ["..."]}, indent=2))
+        lines.append("```\n")
+
     if pipeline:
         lines.append("## Recommended pipeline\n")
         lines.append("```json")
@@ -244,6 +268,14 @@ def generate_html_report(dataset_path: str, out_html_path: str, analysis: Option
     title = Path(dataset_path).name
     summary = _gather_basic_summary(analysis)
     thumbs = _collect_sample_thumbnails(dataset_path, max_images=6)
+    
+    # Semantic Drift (v4.1)
+    latent_emb = None
+    if "profiles" in analysis and "semantic" in analysis["profiles"]:
+        latent_emb = analysis["profiles"]["semantic"].get("latent_embedding")
+    elif "latent_embedding" in analysis:
+        latent_emb = analysis["latent_embedding"]
+    
     # render template
     ctx = {
         "title": title,
@@ -252,6 +284,8 @@ def generate_html_report(dataset_path: str, out_html_path: str, analysis: Option
         "analysis_json": json.dumps(analysis, indent=2),
         "thumbnails": thumbs,
         "pipeline_json": json.dumps(pipeline or {}, indent=2),
+        "semantic_drift": latent_emb is not None,
+        "semantic_drift_json": json.dumps({"latent_embedding_centroid": latent_emb[:16] + ["..."]} if latent_emb else {}, indent=2),
     }
     html = _HTML_TEMPLATE
     # try jinja2 rendering if available (better escaping)
@@ -275,19 +309,31 @@ def generate_html_report(dataset_path: str, out_html_path: str, analysis: Option
             logger.exception("simple html fallback failed")
 
     # replace summary block manually if jinja not present
-    if "{{ summary.items()" in _HTML_TEMPLATE and not _jinja2:
+    if not _jinja2:
         # generate a summary html block
         summary_html = ""
         for k, v in summary.items():
             summary_html += f'<div class="metric"><strong>{k}</strong><div>{v}</div></div>\n'
         html = html.replace("{% for key, val in summary.items() %}\n      <div class=\"metric\"><strong>{{ key }}</strong><div>{{ val }}</div></div>\n      {% endfor %}", summary_html)
 
-    # Now embed thumbnails if present (simple replace)
-    if "data:image/png;base64" not in html and thumbs:
+        # Handle thumbnails
         thumbs_html = "".join([f'<img src="data:image/png;base64,{b64}"/>' for b64 in thumbs])
         html = html.replace("{% for b64 in thumbnails %}\n      <img src=\"data:image/png;base64,{{ b64 }}\"/>\n    {% endfor %}", thumbs_html)
 
-    # Write HTML
+        # Handle semantic drift
+        if latent_emb:
+            drift_html = f'<div class="card"><p><strong>Latent Embedding Centroid:</strong> <i>(Captured from lightweight vision model)</i></p><pre>{ctx["semantic_drift_json"]}</pre></div>'
+            html = html.replace("{% if semantic_drift %}\n  <h2>Semantic Drift</h2>\n  <div class=\"card\">\n    <p><strong>Latent Embedding Centroid:</strong> <i>(Captured from lightweight vision model)</i></p>\n    <pre>{{ semantic_drift_json }}</pre>\n  </div>\n  {% endif %}", f"<h2>Semantic Drift</h2>\n{drift_html}")
+        else:
+            # Strip the tags entirely if no drift
+            import re
+            html = re.sub(r"{% if semantic_drift %}.*?{% endif %}", "", html, flags=re.DOTALL)
+
+        # Cleanup other jinja tags if they remain
+        html = html.replace("{% if analysis %}", "").replace("{% endif %}", "")
+        html = html.replace("{% if thumbnails %}", "").replace("{% if pipeline %}", "")
+        html = html.replace("{{ analysis_json }}", ctx["analysis_json"]).replace("{{ pipeline_json }}", ctx["pipeline_json"])
+        html = html.replace("{{ title }}", str(ctx["title"])).replace("{{ version }}", str(ctx["version"]))
     out_html_path = Path(out_html_path)
     out_html_path.write_text(html, encoding="utf-8")
     logger.info("HTML report written to %s", out_html_path)

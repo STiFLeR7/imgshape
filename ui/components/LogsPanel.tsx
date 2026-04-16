@@ -7,10 +7,12 @@ interface LogsPanelProps {
 }
 
 const LogsPanel: React.FC<LogsPanelProps> = ({ logs }) => {
-  const endRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (scrollRef.current) {
+        scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
   }, [logs]);
 
   return (
@@ -19,7 +21,10 @@ const LogsPanel: React.FC<LogsPanelProps> = ({ logs }) => {
         <Terminal className="w-4 h-4 mr-2 text-gray-400" />
         <h3 className="text-xs font-mono uppercase tracking-wider text-gray-400">System Logs</h3>
       </div>
-      <div className="flex-1 overflow-y-auto p-4 font-mono text-xs space-y-1.5 custom-scrollbar bg-black/40">
+      <div 
+        ref={scrollRef}
+        className="flex-1 overflow-y-auto p-4 font-mono text-xs space-y-1.5 custom-scrollbar bg-black/40"
+      >
         {logs.length === 0 ? (
             <div className="text-gray-600 italic opacity-50">Waiting for system events...</div>
         ) : (
@@ -40,7 +45,6 @@ const LogsPanel: React.FC<LogsPanelProps> = ({ logs }) => {
             </div>
             ))
         )}
-        <div ref={endRef} />
       </div>
     </div>
   );

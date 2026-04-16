@@ -183,7 +183,7 @@ class DecisionEngine:
     The engine NEVER uses AI/ML to make decisions - only explicit rules.
     """
 
-    def __init__(self, rule_version: str = "4.0.0"):
+    def __init__(self, rule_version: str = "4.2.0"):
         """
         Initialize decision engine.
         
@@ -227,7 +227,7 @@ class DecisionEngine:
 
         # Build collection
         collection = DecisionsCollection(
-            schema_version="4.1",  # v4.1
+            schema_version="4.2",  # v4.2
             fingerprint_id=fingerprint.dataset_uri,
             decisions={
                 "model_family": model_family,
@@ -380,7 +380,7 @@ class DecisionEngine:
             risks=risks,
             tradeoffs=tradeoffs,
             alternatives_considered=alternatives,
-            provenance_id=f"v4.1.0-rules-model-{provenance_id}",
+            provenance_id=f"v4.2.0-rules-model-{provenance_id}",
             metadata={
                 "rule_version": self.rule_version,
                 "fingerprint_inputs": ["signal.capacity_ceiling", "semantic.primary_domain"]

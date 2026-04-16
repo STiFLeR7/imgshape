@@ -24,6 +24,7 @@ class DriftScore:
     overall_drift: float  # 0.0 (none) to 1.0 (total)
     spatial_drift: float
     signal_drift: float
+    semantic_drift: float
     is_significant: bool
     rationale: List[str]
 
@@ -94,16 +95,45 @@ class DatasetComparator:
         if res_drift > 0.3:
             rationale.append(f"Median resolution shifted by {res_drift*100:.1f}%")
 
-        # Overall weighted drift
-        overall = (sig_drift * 0.6) + (spa_drift * 0.4)
+        # 3. Semantic Drift (Latent Embeddings)
+        b_sem = baseline.profiles['semantic']
+        c_sem = current.profiles['semantic']
+        
+        sem_drift = 0.0
+        # Use getattr or check for latent_embedding attribute
+        b_emb = getattr(b_sem, 'latent_embedding', None)
+        c_emb = getattr(c_sem, 'latent_embedding', None)
+        
+        if b_emb is not None and c_emb is not None:
+            sem_drift = self.calculate_semantic_drift(
+                np.array(b_emb), 
+                np.array(c_emb)
+            )
+            
+        if sem_drift > 0.15:
+            rationale.append(f"Significant semantic drift detected ({sem_drift:.2f}) in latent space")
+
+        # Overall weighted drift: 50% semantic, 30% signal, 20% spatial
+        overall = (sem_drift * 0.5) + (sig_drift * 0.3) + (spa_drift * 0.2)
         
         return DriftScore(
             overall_drift=float(overall),
             spatial_drift=float(spa_drift),
             signal_drift=float(sig_drift),
+            semantic_drift=float(sem_drift),
             is_significant=overall > 0.25,
             rationale=rationale
         )
+
+    def calculate_semantic_drift(self, baseline_emb: np.ndarray, current_emb: np.ndarray) -> float:
+        """Calculate drift using cosine distance (1 - cosine similarity)"""
+        norm_b = np.linalg.norm(baseline_emb)
+        norm_c = np.linalg.norm(current_emb)
+        if norm_b == 0 or norm_c == 0:
+            return 1.0
+        
+        similarity = np.dot(baseline_emb, current_emb) / (norm_b * norm_c)
+        return float(1.0 - max(0.0, similarity))
 
     def calculate_similarity_index(self, baseline: DatasetFingerprint, current: DatasetFingerprint) -> SimilarityIndex:
         """Calculate high-level similarity index based on derived classes and profiles"""

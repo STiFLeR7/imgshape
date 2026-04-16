@@ -43,7 +43,7 @@ export interface ReportConfig {
 
 export interface AppState {
   version: 'v3' | 'v4';
-  activeView: 'dashboard' | 'augmentation' | 'report';
+  activeView: 'dashboard' | 'augmentation' | 'report' | 'drift';
   file: File | null;
   filePreviewUrl: string | null;
   datasetPath: string;
@@ -53,14 +53,17 @@ export interface AppState {
   reportConfig: ReportConfig;
   status: 'idle' | 'loading' | 'success' | 'error';
   results: any | null;
+  driftResults: any | null;
   augmentationResults: { images: Array<{ base64: string; label: string }> } | null;
   reportResults: { id: string; content: string; url?: string } | null;
+  gpuActive: boolean;
 }
 
 export interface HealthResponse {
   status: string;
   version: string;
   v4_available: boolean;
+  gpu_available: boolean;
 }
 
 export interface FingerprintResponse {

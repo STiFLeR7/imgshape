@@ -5,7 +5,20 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ---
 
-## [4.1.0] - 2026-03-01
+## [4.2.0] - 2026-04-16
+
+### v4.2.0 "Bento Intelligence"
+
+The **v4.2.0** release is a major UX overhaul coupled with deep semantic intelligence. It transforms the Atlas engine into a professional, modular workspace.
+
+**Highlights:**
+- **UX Refactor (Bento Grid)**: A complete UI redesign using a 12-column grid system for high information density and professional engineering aesthetic.
+- **Semantic Drift 2.0**: Integrated vision-transformer (DINOv2) embeddings to detect semantic shifts in datasets beyond simple statistics.
+- **Hyper-optimized GPU**: Vectorized PyTorch kernels for entropy and blur, reducing VRAM transfer overhead and improving batch throughput.
+- **Domain Intelligence**: Specialized fingerprinting profiles and UI views for Medical (DICOM), Satellite, and OCR datasets.
+- **Provenance IDs**: Enhanced audit trails for all rule-based decisions.
+
+### [4.1.0] - 2026-03-01
 
 ### v4.1.0
 

@@ -1,4 +1,4 @@
-# setup.py — imgshape v4.1.0 (Atlas)
+# setup.py — imgshape v4.2.0 (Bento Intelligence)
 from setuptools import setup, find_packages
 
 # read long description
@@ -7,10 +7,10 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="imgshape",
-    version="4.1.0",
+    version="4.2.0",
     description=(
-        "imgshape v4.1.0 (Atlas) — Dataset intelligence layer: "
-        "deterministic fingerprinting and decision-making for ML pipelines. "
+        "imgshape v4.2.0 (Bento Intelligence) — Dataset intelligence layer: "
+        "deterministic fingerprinting, semantic drift, and bento-box UI. "
         "FastAPI web service, plugin system, and Atlas orchestrator."
     ),
     long_description=long_description,

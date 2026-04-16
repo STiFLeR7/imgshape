@@ -2,7 +2,7 @@ from __future__ import annotations
 
 # src/imgshape/__init__.py
 """
-imgshape package public API (v2.2.0 -> v3.0.0 -> v4.0.0) — lazy exports + safe optional telemetry.
+imgshape package public API (v2.2.0 -> v3.0.0 -> v4.0.0 -> v4.2.0) — lazy exports + safe optional telemetry.
 
 Behavior:
 - Avoid importing heavy submodules at import-time.

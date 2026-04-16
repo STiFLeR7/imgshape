@@ -1,13 +1,13 @@
 """
 imgshape.v4.fingerprint — Dataset Fingerprint Extraction System
 
-This module implements the core fingerprint extraction system for imgshape v4.0.0 (Atlas).
+This module implements the core fingerprint extraction system for imgshape v4.2.0 (Atlas Bento).
 Fingerprints are canonical semantic identities derived deterministically from dataset inspection.
 
 Principles:
 - Stable across runs (deterministic)
 - Human-readable and machine-actionable
-- Schema-versioned (v4.0)
+- Schema-versioned (v4.2)
 - Never depends on user intent (describes what IS, not what is WANTED)
 """
 
@@ -22,6 +22,8 @@ import math
 
 import numpy as np
 from PIL import Image, ImageStat
+
+from imgshape.semantic_v4 import SemanticExtractor
 
 try:
     import torch
@@ -141,6 +143,8 @@ class PrimaryDomain(Enum):
     PHOTOGRAPHIC = "photographic"
     MEDICAL = "medical"
     DOCUMENT = "document"
+    SATELLITE = "satellite"
+    OCR = "ocr"
     SYNTHETIC = "synthetic"
     MIXED = "mixed"
     UNKNOWN = "unknown"
@@ -265,12 +269,34 @@ class SemanticProfile:
     content_type: ContentType
     characteristics: List[str]
     specialization_required: bool
+    latent_embedding: Optional[List[float]] = None
+
+
+@dataclass
+class MedicalProfile:
+    """Specialized metrics for medical imaging (DICOM/NIfTI)"""
+    hu_range: Tuple[float, float]
+    slice_consistency: float
+
+
+@dataclass
+class SatelliteProfile:
+    """Specialized metrics for remote sensing and satellite imagery"""
+    gsd_estimate: float  # Ground Sample Distance
+    cloud_cover_estimate: float
+
+
+@dataclass
+class OCRProfile:
+    """Specialized metrics for document analysis and OCR"""
+    text_density: float
+    orientation_variance: float
 
 
 @dataclass
 class DatasetFingerprint:
     """
-    Complete dataset fingerprint (v4.0).
+    Complete dataset fingerprint (v4.2).
     
     This is the canonical semantic identity of a dataset.
     It is stable, deterministic, and schema-versioned.
@@ -311,19 +337,39 @@ class FingerprintExtractor:
     Deterministic fingerprint extraction from image datasets.
     
     This class implements the core fingerprint extraction logic according to
-    the v4.0 specification. It computes all five profile types and derives
+    the v4.2 specification (Atlas Bento). It computes all five profile types and derives
     the canonical dataset class.
     """
 
-    def __init__(self, sample_limit: Optional[int] = None):
+    def __init__(
+        self,
+        sample_limit: Optional[int] = None,
+        use_gpu: bool = False,
+        batch_size: int = 32
+    ):
         """
         Initialize fingerprint extractor.
         
         Args:
             sample_limit: Optional limit on number of images to analyze
+            use_gpu: Whether to use GPU acceleration for entropy and blur
+            batch_size: Batch size for GPU processing
         """
         self.sample_limit = sample_limit
+        self.use_gpu = use_gpu and TORCH_AVAILABLE
+        self.batch_size = batch_size
         self.logger = logger
+        
+        # Initialize semantic extractor for latent embeddings (v4.1)
+        self.semantic_extractor = None
+        if TORCH_AVAILABLE:
+            try:
+                self.semantic_extractor = SemanticExtractor()
+            except Exception as e:
+                self.logger.warning(f"Failed to initialize SemanticExtractor: {e}")
+        
+        if use_gpu and not TORCH_AVAILABLE:
+            self.logger.warning("GPU acceleration requested but PyTorch is not installed. Falling back to CPU.")
 
     def extract(self, dataset_path: Path) -> DatasetFingerprint:
         """
@@ -350,28 +396,44 @@ class FingerprintExtractor:
         quality = self._compute_quality_profile(images)
         semantic = self._compute_semantic_profile(images, spatial, signal)
         
+        # Compute specialized profile if applicable
+        specialized = None
+        if semantic.primary_domain == PrimaryDomain.MEDICAL:
+            specialized = self._compute_medical_profile(images)
+        elif semantic.primary_domain == PrimaryDomain.SATELLITE:
+            specialized = self._compute_satellite_profile(images)
+        elif semantic.primary_domain == PrimaryDomain.OCR:
+            specialized = self._compute_ocr_profile(images)
+        
         # Derive canonical class
         derived_class, confidence = self._derive_class(spatial, signal, distribution, quality, semantic)
         
         # Generate dataset URI
         dataset_uri = self._generate_uri(derived_class)
         
+        # Build profiles dictionary
+        profiles = {
+            "spatial": spatial,
+            "signal": signal,
+            "distribution": distribution,
+            "quality": quality,
+            "semantic": semantic
+        }
+        
+        # Add specialized profile if found
+        if specialized:
+            profiles[semantic.primary_domain.value] = specialized
+            
         # Build fingerprint
         fingerprint = DatasetFingerprint(
-            schema_version="4.1",  # Updated for v4.1
+            schema_version="4.2",  # Updated for v4.2
             dataset_uri=dataset_uri,
-            profiles={
-                "spatial": spatial,
-                "signal": signal,
-                "distribution": distribution,
-                "quality": quality,
-                "semantic": semantic
-            },
+            profiles=profiles,
             derived_class=derived_class,
             confidence=confidence,
             metadata={
                 "sample_count": len(images),
-                "imgshape_version": "4.1.0",
+                "imgshape_version": "4.2.0",
                 "acceleration": "gpu" if GPUHandler.is_cuda_available() else "cpu"
             }
         )
@@ -386,11 +448,37 @@ class FingerprintExtractor:
         """
         images = []
         
+        handler = None
+        if self.use_gpu:
+            try:
+                from imgshape.gpu_v4 import BatchedGPUHandler
+                handler = BatchedGPUHandler(self.batch_size)
+            except (ImportError, RuntimeError) as e:
+                self.logger.warning(f"Failed to initialize GPU handler: {e}. Falling back to CPU.")
+                self.use_gpu = False
+                
+        pending_batch = []
+        
+        def process_batch_results(batch_results, batch_metadata):
+            for res, meta in zip(batch_results, batch_metadata):
+                meta['entropy'] = res['entropy']
+                meta['blur_score'] = res['blur']
+                if '_img_array' in meta:
+                    del meta['_img_array']
+
         if dataset_path.is_file():
             # Single image
-            img_data = self._analyze_single_image(dataset_path)
+            img_data = self._analyze_single_image(dataset_path, handler)
             if img_data:
                 images.append(img_data)
+                if handler:
+                    results = handler.add_image(img_data['_img_array'])
+                    if results:
+                        process_batch_results(results, [img_data])
+                    else:
+                        # For single image, flush immediately if batching
+                        results = handler.flush()
+                        process_batch_results(results, [img_data])
         else:
             # Directory
             image_files = self._find_images(dataset_path)
@@ -400,10 +488,21 @@ class FingerprintExtractor:
                 if self.sample_limit and count >= self.sample_limit:
                     break
                     
-                img_data = self._analyze_single_image(img_path)
+                img_data = self._analyze_single_image(img_path, handler)
                 if img_data:
                     images.append(img_data)
                     count += 1
+                    
+                    if handler:
+                        pending_batch.append(img_data)
+                        results = handler.add_image(img_data['_img_array'])
+                        if results:
+                            process_batch_results(results, pending_batch)
+                            pending_batch = []
+        
+        if handler and pending_batch:
+            results = handler.flush()
+            process_batch_results(results, pending_batch)
         
         return images
 
@@ -411,17 +510,26 @@ class FingerprintExtractor:
         """Find all image files in directory"""
         extensions = {'.jpg', '.jpeg', '.png', '.bmp', '.tiff', '.webp'}
         images = []
+        seen = set()
         
         for ext in extensions:
-            images.extend(directory.rglob(f"*{ext}"))
-            images.extend(directory.rglob(f"*{ext.upper()}"))
+            # Case-insensitive matching is handled differently by OS
+            # but we want to be explicit and avoid duplicates
+            for pattern in [f"*{ext}", f"*{ext.upper()}"]:
+                for img_path in directory.rglob(pattern):
+                    # Canonicalize path to avoid duplicates
+                    resolved = img_path.resolve()
+                    if resolved not in seen:
+                        images.append(img_path)
+                        seen.add(resolved)
         
         return images
 
-    def _analyze_single_image(self, img_path: Path) -> Optional[Dict[str, Any]]:
+    def _analyze_single_image(self, img_path: Path, handler: Optional[Any] = None) -> Optional[Dict[str, Any]]:
         """Analyze a single image and return metadata"""
         try:
             with Image.open(img_path) as img:
+                original_mode = img.mode
                 # Convert to RGB for consistent analysis
                 if img.mode != 'RGB':
                     img = img.convert('RGB')
@@ -435,18 +543,33 @@ class FingerprintExtractor:
                 # Histogram (bins=256)
                 hist = img.histogram() # Returns List[int], length 256*channels
                 
-                # Shannon entropy (approximation from variance or direct if GPU)
-                # For v4.1 we improve this with a direct computation
+                # Check if it's effectively grayscale
+                is_grayscale = (original_mode in ('L', 'LA', 'I', 'F'))
+                if not is_grayscale and img.mode == 'RGB':
+                    # Check if all channels are same
+                    r, g, b = img.split()
+                    if ImageStat.Stat(r).mean == ImageStat.Stat(g).mean == ImageStat.Stat(b).mean:
+                        # Further check if they are identical
+                        if np.array_equal(np.array(r), np.array(g)) and np.array_equal(np.array(g), np.array(b)):
+                            is_grayscale = True
+                
                 img_array = np.array(img)
-                entropy = self._compute_entropy(img_array)
                 
-                # Blur detection (Laplacian variance)
-                blur_score = self._compute_blur(img_array)
+                if handler:
+                    # Skip individual computation
+                    entropy = 0.0
+                    blur_score = 0.0
+                else:
+                    # Shannon entropy (approximation from variance or direct if GPU)
+                    entropy = self._compute_entropy(img_array)
+                    # Blur detection (Laplacian variance)
+                    blur_score = self._compute_blur(img_array)
                 
-                return {
+                result = {
                     'path': img_path,
                     'size': (img.width, img.height),
                     'mode': img.mode,
+                    'is_grayscale': is_grayscale,
                     'entropy': entropy,
                     'mean': stat.mean,
                     'variance': variance,
@@ -454,6 +577,12 @@ class FingerprintExtractor:
                     'histogram': hist,
                     'blur_score': blur_score
                 }
+                
+                if handler:
+                    # Store array temporarily for batching
+                    result['_img_array'] = img_array
+                    
+                return result
         except Exception as e:
             self.logger.warning(f"Failed to analyze {img_path}: {e}")
             return None
@@ -713,11 +842,11 @@ class FingerprintExtractor:
         # In full implementation, this could use lightweight classification
         
         # Check for grayscale (medical/document indicator)
-        modes = [img['mode'] for img in images]
-        grayscale_ratio = sum(1 for m in modes if m in ('L', 'LA')) / len(modes)
+        grayscale_ratio = sum(1 for img in images if img.get('is_grayscale', False)) / len(images)
         
         # Check for high entropy (photographic indicator)
         mean_entropy = signal.entropy.mean
+        ar_variance = spatial.aspect_ratio_variance
         
         characteristics = []
         
@@ -728,12 +857,17 @@ class FingerprintExtractor:
                 content_type = ContentType.LOW_SIGNAL
                 specialization_required = True
             else:
-                primary_domain = PrimaryDomain.DOCUMENT
+                primary_domain = PrimaryDomain.OCR
                 content_type = ContentType.TEXT_DENSE
                 specialization_required = True
         else:
             characteristics.append("color")
-            if mean_entropy > 8:
+            # Satellite heuristic: uniform square tiles often have very low AR variance
+            if ar_variance < 0.001 and mean_entropy > 7.0:
+                primary_domain = PrimaryDomain.SATELLITE
+                content_type = ContentType.HIGH_ENTROPY
+                specialization_required = True
+            elif mean_entropy > 8:
                 primary_domain = PrimaryDomain.PHOTOGRAPHIC
                 content_type = ContentType.HIGH_ENTROPY
                 specialization_required = False
@@ -742,12 +876,81 @@ class FingerprintExtractor:
                 content_type = ContentType.STRUCTURED
                 specialization_required = False
         
+        # Compute latent embedding (v4.1)
+        latent_embedding = None
+        if self.semantic_extractor and images:
+            try:
+                # Sample up to 10 images for mean embedding
+                sample_indices = np.linspace(0, len(images) - 1, min(10, len(images)), dtype=int)
+                embeddings = []
+                
+                for idx in sample_indices:
+                    img_path = images[idx]['path']
+                    with Image.open(img_path) as img:
+                        img_arr = np.array(img.convert('RGB'))
+                        emb = self.semantic_extractor.extract(img_arr)
+                        embeddings.append(emb)
+                
+                if embeddings:
+                    mean_emb = np.mean(embeddings, axis=0)
+                    latent_embedding = mean_emb.tolist()
+            except Exception as e:
+                self.logger.warning(f"Failed to compute latent embedding: {e}")
+        
         return SemanticProfile(
             primary_domain=primary_domain,
             content_type=content_type,
             characteristics=characteristics,
-            specialization_required=specialization_required
+            specialization_required=specialization_required,
+            latent_embedding=latent_embedding
         )
+
+    def _compute_medical_profile(self, images: List[Dict[str, Any]]) -> MedicalProfile:
+        """Compute medical-specific metrics"""
+        all_min = []
+        all_max = []
+        for img in images:
+            ext = img['extrema']
+            all_min.append(np.min([e[0] for e in ext]))
+            all_max.append(np.max([e[1] for e in ext]))
+        
+        hu_range = (float(np.min(all_min)), float(np.max(all_max)))
+        
+        sizes = [img['size'] for img in images]
+        size_vars = np.var([s[0] for s in sizes]) + np.var([s[1] for s in sizes])
+        slice_consistency = 1.0 / (1.0 + float(size_vars))
+        
+        return MedicalProfile(hu_range=hu_range, slice_consistency=slice_consistency)
+
+    def _compute_satellite_profile(self, images: List[Dict[str, Any]]) -> SatelliteProfile:
+        """Compute satellite-specific metrics"""
+        sizes = [img['size'] for img in images]
+        avg_dim = np.mean([s[0] + s[1] for s in sizes]) / 2.0
+        gsd_estimate = 100.0 / max(1.0, float(avg_dim))
+        
+        cloud_ratios = []
+        for img in images:
+            hist = img['histogram']
+            total_count = sum(hist)
+            high_count = 0
+            # RGB histogram is 3 * 256
+            for c in range(3):
+                high_count += sum(hist[c*256 + 240 : (c+1)*256])
+            cloud_ratios.append(high_count / max(1, total_count))
+        
+        cloud_cover = float(np.mean(cloud_ratios))
+        
+        return SatelliteProfile(gsd_estimate=gsd_estimate, cloud_cover_estimate=cloud_cover)
+
+    def _compute_ocr_profile(self, images: List[Dict[str, Any]]) -> OCRProfile:
+        """Compute OCR-specific metrics"""
+        entropies = [img['entropy'] for img in images]
+        text_density = float(np.mean(entropies)) / 10.0
+        
+        ars = [img['size'][0] / max(1, img['size'][1]) for img in images]
+        orientation_variance = float(np.var(ars))
+        
+        return OCRProfile(text_density=text_density, orientation_variance=orientation_variance)
 
     def _derive_class(
         self,

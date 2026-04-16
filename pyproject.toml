@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "imgshape"
-version = "4.1.0"
-description = "imgshape v4.1.0 (Atlas) — Dataset intelligence layer: deterministic fingerprinting and decision-making for ML pipelines."
+version = "4.2.0"
+description = "imgshape v4.2.0 (Bento Intelligence) — Dataset intelligence layer: deterministic fingerprinting, semantic drift, and bento-box UI."
 readme = "README.md"
 authors = [
   { name = "Stifler", email = "hillaniljppatel@gmail.com" }
