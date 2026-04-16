@@ -20,3 +20,16 @@ def test_batch_collection():
     assert results is not None
     assert len(results) == 4
     assert len(handler.queue) == 0
+
+def test_batched_metrics():
+    handler = BatchedGPUHandler(batch_size=2)
+    img1 = np.random.randint(0, 255, (100, 100, 3), dtype=np.uint8)
+    img2 = np.random.randint(0, 255, (100, 100, 3), dtype=np.uint8)
+    
+    handler.add_image(img1)
+    results = handler.add_image(img2)
+    
+    assert results is not None
+    assert "entropy" in results[0]
+    assert "blur" in results[0]
+    assert isinstance(results[0]["entropy"], float)

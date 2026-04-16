@@ -18,9 +18,34 @@ class BatchedGPUHandler:
         if not self.queue:
             return []
         
-        # Simple implementation for now, will add kernels in next task
-        batch_t = [torch.from_numpy(img).permute(2, 0, 1).float().to(self.device) for img in self.queue]
-        # Placeholder for actual kernel results
-        results = [{"batch_idx": i} for i in range(len(self.queue))]
+        # 1. Stack into batch tensor [B, C, H, W]
+        batch_t = torch.stack([
+            torch.from_numpy(img).permute(2, 0, 1).float().to(self.device) 
+            for img in self.queue
+        ])
+        
+        # 2. Batched Entropy & Blur
+        results = []
+        for i in range(len(self.queue)):
+            img_t = batch_t[i]
+            # Shannon entropy on GPU
+            hist = torch.histc(img_t, bins=256, min=0, max=255)
+            probs = hist / hist.sum()
+            probs = probs[probs > 0]
+            entropy = -torch.sum(probs * torch.log2(probs)).item()
+            
+            # Laplacian Blur
+            laplacian_kernel = torch.tensor([[0, 1, 0], [1, -4, 1], [0, 1, 0]], device=self.device).float().view(1, 1, 3, 3)
+            # Grayscale conversion
+            gray = 0.2989 * img_t[0] + 0.5870 * img_t[1] + 0.1140 * img_t[2]
+            gray = gray.unsqueeze(0).unsqueeze(0)
+            edge_map = torch.nn.functional.conv2d(gray, laplacian_kernel)
+            blur_score = torch.var(edge_map).item()
+            
+            results.append({
+                "entropy": float(entropy),
+                "blur": float(blur_score)
+            })
+            
         self.queue = []
         return results
