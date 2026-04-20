@@ -11,14 +11,16 @@ ENV PYTHONUNBUFFERED=1 \
 # Avoid interactive prompts
 ARG DEBIAN_FRONTEND=noninteractive
 
-# Install system dependencies (for OpenCV, WeasyPrint, and compilation)
+# Install system dependencies (for OpenCV, WeasyPrint, and C-extension compilation)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     gcc \
+    python3-dev \
     ca-certificates \
     curl \
     # OpenCV dependencies
     libgl1 \
+    libgl1-mesa-glx \
     libglib2.0-0t64 \
     libsm6 \
     libxext6 \
@@ -27,10 +29,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libcairo2 \
     libpango-1.0-0 \
     libpangocairo-1.0-0 \
+    libpangoft2-1.0-0 \
     libgdk-pixbuf-2.0-0 \
     libffi-dev \
     shared-mime-info \
     libharfbuzz-subset0 \
+    libopenjp2-7 \
+    libjpeg-dev \
     # Optional tools
     nano \
     && apt-get clean \
