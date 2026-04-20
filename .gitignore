@@ -168,3 +168,5 @@ docs/_build/
 # !Dockerfile
 # !requirements.txt
 
+.vercel
+.env*.local
