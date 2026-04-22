@@ -15,6 +15,9 @@ import DashboardGrid from './components/DashboardGrid';
 import InsightPanel from './components/InsightPanel';
 import SemanticMap from './components/SemanticMap';
 import ControlDrawer from './components/ControlDrawer';
+import BentoHero from './components/BentoHero';
+import InstallationMatrix from './components/InstallationMatrix';
+import CloudStatusIndicator from './components/CloudStatusIndicator';
 import { api } from './services/api';
 import { AppState, V4Config, V3Config, LogEntry, AugmentationConfig, ReportConfig } from './types';
 
@@ -281,76 +284,88 @@ const App: React.FC = () => {
       case 'dashboard':
       default:
         return (
-          <DashboardGrid>
-            {/* KPI Row */}
-            <div className="lg:col-span-3">
-              <KPICard 
-                label="Total Samples" 
-                value={state.results?.fingerprint?.sample_count || '0'} 
-                icon={Layers} 
-                loading={state.status === 'loading'}
-              />
-            </div>
-            <div className="lg:col-span-3">
-              <KPICard 
-                label="Drift Confidence" 
-                value={state.results?.drift?.overall_drift ? `${(100 - state.results.drift.overall_drift * 100).toFixed(1)}%` : '100%'} 
-                icon={Zap} 
-                color="amber"
-                loading={state.status === 'loading'}
-              />
-            </div>
-            <div className="lg:col-span-3">
-               <KPICard 
-                label="Detected Domain" 
-                value={state.results?.fingerprint?.profiles?.semantic?.inferred_type || 'Unknown'} 
-                icon={Target} 
-                color="indigo"
-                loading={state.status === 'loading'}
-              />
-            </div>
-            <div className="lg:col-span-3">
-               <KPICard 
-                label="Processing" 
-                value={state.gpuActive ? 'GPU' : 'CPU'} 
-                subtext={state.gpuActive ? 'PyTorch/CUDA' : 'Standard'}
-                icon={Cpu} 
-                color="purple"
-                loading={state.status === 'loading'}
-              />
-            </div>
+          <div className="space-y-8">
+            <BentoHero />
+            
+            <DashboardGrid>
+              {/* KPI Row */}
+              <div className="lg:col-span-3">
+                <KPICard 
+                  label="Total Samples" 
+                  value={state.results?.fingerprint?.sample_count || '0'} 
+                  icon={Layers} 
+                  loading={state.status === 'loading'}
+                />
+              </div>
+              <div className="lg:col-span-3">
+                <KPICard 
+                  label="Drift Confidence" 
+                  value={state.results?.drift?.overall_drift ? `${(100 - state.results.drift.overall_drift * 100).toFixed(1)}%` : '100%'} 
+                  icon={Zap} 
+                  color="amber"
+                  loading={state.status === 'loading'}
+                />
+              </div>
+              <div className="lg:col-span-3">
+                 <KPICard 
+                  label="Detected Domain" 
+                  value={state.results?.fingerprint?.profiles?.semantic?.inferred_type || 'Unknown'} 
+                  icon={Target} 
+                  color="indigo"
+                  loading={state.status === 'loading'}
+                />
+              </div>
+              <div className="lg:col-span-3">
+                 <KPICard 
+                  label="Processing" 
+                  value={state.gpuActive ? 'GPU' : 'CPU'} 
+                  subtext={state.gpuActive ? 'PyTorch/CUDA' : 'Standard'}
+                  icon={Cpu} 
+                  color="purple"
+                  loading={state.status === 'loading'}
+                />
+              </div>
 
-            {/* Middle Row */}
-            <div className="lg:col-span-8 min-h-[400px]">
-                <SemanticMap 
-                    embedding={state.results?.fingerprint?.profiles?.semantic?.latent_embedding}
-                    loading={state.status === 'loading'}
-                />
-            </div>
-            <div className="lg:col-span-4 min-h-[400px]">
-                <InsightPanel 
-                    profiles={state.results?.fingerprint?.profiles}
-                    loading={state.status === 'loading'}
-                />
-            </div>
+              {/* Middle Row */}
+              <div className="lg:col-span-8 min-h-[400px]">
+                  <SemanticMap 
+                      embedding={state.results?.fingerprint?.profiles?.semantic?.latent_embedding}
+                      loading={state.status === 'loading'}
+                  />
+              </div>
+              <div className="lg:col-span-4 min-h-[400px]">
+                  <InsightPanel 
+                      profiles={state.results?.fingerprint?.profiles}
+                      loading={state.status === 'loading'}
+                  />
+              </div>
 
-            {/* Bottom Row */}
-            <div className="lg:col-span-4 min-h-[400px]">
-                <PreviewPanel 
-                    file={state.file} 
-                    imageUrl={state.filePreviewUrl} 
-                    datasetPath={state.datasetPath}
-                    isLoading={state.status === 'loading'}
-                />
-            </div>
+              {/* Bottom Row */}
+              <div className="lg:col-span-4 min-h-[400px]">
+                  <PreviewPanel 
+                      file={state.file} 
+                      imageUrl={state.filePreviewUrl} 
+                      datasetPath={state.datasetPath}
+                      isLoading={state.status === 'loading'}
+                  />
+              </div>
 
-            <div className="lg:col-span-8 min-h-[400px] flex flex-col">
-                <ResultsPanel 
-                    data={state.results}
-                    status={state.status}
-                />
+              <div className="lg:col-span-8 min-h-[400px] flex flex-col">
+                  <ResultsPanel 
+                      data={state.results}
+                      status={state.status}
+                  />
+              </div>
+            </DashboardGrid>
+
+            <div className="mt-12">
+              <h2 className="text-2xl font-bold text-white mb-6 flex items-center gap-3">
+                <Layers className="w-6 h-6 text-accent" />
+                Installation Compatibility Matrix
+              </h2>
+              <InstallationMatrix />
             </div>
-          </DashboardGrid>
+          </div>
         );
     }
   };
@@ -382,6 +397,9 @@ const App: React.FC = () => {
         />
 
         <div className="flex-1 flex flex-col p-6 space-y-6 overflow-y-auto custom-scrollbar">
+            <div className="flex justify-end">
+              <CloudStatusIndicator />
+            </div>
             {/* Main Content Area */}
             <div className="flex-1 min-h-[400px] flex flex-col">
               {renderContent()}
