@@ -43,6 +43,21 @@
       ::-webkit-scrollbar-thumb:hover {
         background: #4b5563; 
       }
+      .cyber-glow {
+        background: linear-gradient(135deg, rgba(173, 198, 255, 0.1) 0%, rgba(173, 198, 255, 0) 50%);
+      }
+      .accent-border {
+        position: relative;
+      }
+      .accent-border::before {
+        content: "";
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 1px;
+        height: 20px;
+        background: #adc6ff;
+      }
     </style>
   <script type="importmap">
 {
