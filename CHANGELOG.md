@@ -5,6 +5,22 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [5.0.0] - 2026-05-30
+
+### v5.0.0 "Covenant"
+
+The **v5.0.0** release is a ground-up architectural pivot from a local web/dashboard service into a lean, developer-first **dataset governance and contract enforcement engine**. It provides CI/CD-native verification tools and Python APIs to guarantee dataset quality, integrity, and reproducibility.
+
+**Highlights:**
+- **Vision Dataset Governance**: Declarative YAML contracts validation with JSON schema support and clause-specific severity overrides (`error` or `warning`).
+- **Atlas Profiler Suite**: A unified engine divided into 5 distinct profilers (Spatial, Signal, Distribution, Quality, Semantic) computing deterministic, cross-platform metrics.
+- **Test Runner (`imgshape test`)**: Pytest-style vision dataset assertions with tabular CLI reporting and markdown/JSON output renderers.
+- **Dataset Diff Engine (`imgshape diff`)**: Git-like comparison of baseline and candidate datasets/fingerprints measuring class distribution, entropy shifts, and semantic drift (DINOv2). Exits with exit code `1` on significant drift.
+- **Deterministic Audit Trails**: Cryptographically robust SHA256 content-based `provenance_id` and cross-platform `.fingerprint_lock` lockfiles for dataset version verification.
+- **Lean Packaging**: Removed all web components (React UI, Streamlit, FastAPI, Uvicorn, Docker, Cloud Run configurations) reducing dependency footprint and package size.
+
+---
+
 ## [4.2.0] - 2026-04-16
 
 ### v4.2.0 "Bento Intelligence"

@@ -1,34 +1,37 @@
 import pytest
-import torch
-import numpy as np
-from imgshape.gpu_v4 import BatchedGPUHandler
+
+torch = pytest.importorskip("torch")
+import numpy as np  # noqa: E402
+from imgshape.gpu_v4 import BatchedGPUHandler  # noqa: E402
+
 
 def test_batch_collection():
     handler = BatchedGPUHandler(batch_size=4)
     img = np.zeros((100, 100, 3), dtype=np.uint8)
-    
+
     # Should not trigger execution yet
     res = handler.add_image(img)
     assert res is None
     assert len(handler.queue) == 1
-    
+
     # Fill batch
     handler.add_image(img)
     handler.add_image(img)
     results = handler.add_image(img)
-    
+
     assert results is not None
     assert len(results) == 4
     assert len(handler.queue) == 0
+
 
 def test_batched_metrics():
     handler = BatchedGPUHandler(batch_size=2)
     img1 = np.random.randint(0, 255, (100, 100, 3), dtype=np.uint8)
     img2 = np.random.randint(0, 255, (100, 100, 3), dtype=np.uint8)
-    
+
     handler.add_image(img1)
     results = handler.add_image(img2)
-    
+
     assert results is not None
     assert "entropy" in results[0]
     assert "blur" in results[0]

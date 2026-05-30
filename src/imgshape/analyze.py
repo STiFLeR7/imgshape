@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import logging
 import math
-from typing import Any, Dict, Optional, Iterable, List, Tuple
+from typing import Any, Dict, Optional, Iterable, List
 from pathlib import Path
 from io import BytesIO
 from collections import Counter
@@ -22,7 +22,9 @@ from PIL import Image, ImageStat, UnidentifiedImageError
 logger = logging.getLogger("imgshape.analyze")
 if not logger.handlers:
     ch = logging.StreamHandler()
-    ch.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s"))
+    ch.setFormatter(
+        logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s")
+    )
     logger.addHandler(ch)
 logger.setLevel(logging.INFO)
 
@@ -129,7 +131,9 @@ def _string_candidates(s: str) -> List[Path]:
     return out
 
 
-def _open_image_from_input(inp: Any, allow_network: bool = False) -> Optional[Image.Image]:
+def _open_image_from_input(
+    inp: Any, allow_network: bool = False
+) -> Optional[Image.Image]:
     """Open image from PIL.Image, bytes, file-like, path string, or Path."""
     if inp is None:
         return None
@@ -311,16 +315,38 @@ def analyze_type(input_obj: Any, allow_network: bool = False) -> Dict[str, Any]:
         if w and h:
             min_side = min(w, h)
             if min_side >= 224:
-                suggestions.update({"suggested_size": [224, 224], "suggested_model": "ResNet/MobileNet"})
+                suggestions.update(
+                    {
+                        "suggested_size": [224, 224],
+                        "suggested_model": "ResNet/MobileNet",
+                    }
+                )
             elif min_side >= 96:
-                suggestions.update({"suggested_size": [96, 96], "suggested_model": "EfficientNet-B0 / MobileNetV2"})
+                suggestions.update(
+                    {
+                        "suggested_size": [96, 96],
+                        "suggested_model": "EfficientNet-B0 / MobileNetV2",
+                    }
+                )
             else:
-                suggestions.update({"suggested_size": [32, 32], "suggested_model": "TinyNet/CIFAR-style"})
+                suggestions.update(
+                    {
+                        "suggested_size": [32, 32],
+                        "suggested_model": "TinyNet/CIFAR-style",
+                    }
+                )
         else:
-            suggestions.update({"suggested_size": [128, 128], "suggested_model": "General-purpose"})
+            suggestions.update(
+                {"suggested_size": [128, 128], "suggested_model": "General-purpose"}
+            )
 
         guess = _guess_image_type(meta, ent)
-        return {"meta": meta, "entropy": ent, "suggestions": suggestions, "guess_type": guess}
+        return {
+            "meta": meta,
+            "entropy": ent,
+            "suggestions": suggestions,
+            "guess_type": guess,
+        }
     except Exception as exc:
         logger.exception("Unexpected error in analyze_type: %s", exc)
         return {"error": "Internal analyzer failure", "detail": str(exc)}
@@ -352,15 +378,23 @@ def analyze_dataset(dataset_input: Any, sample_limit: int = 200) -> Dict[str, An
                 sample_summary = analyze_type(pil)
                 return {
                     "image_count": 1,
-                    "unique_shapes": {f"{meta.get('width')}x{meta.get('height')}": 1} if meta else {},
-                    "most_common_shape": f"{meta.get('width')}x{meta.get('height')}" if meta else None,
+                    "unique_shapes": (
+                        {f"{meta.get('width')}x{meta.get('height')}": 1} if meta else {}
+                    ),
+                    "most_common_shape": (
+                        f"{meta.get('width')}x{meta.get('height')}" if meta else None
+                    ),
                     "most_common_shape_count": 1,
                     "channels_distribution": {meta.get("channels"): 1} if meta else {},
                     "avg_entropy": ent,
                     "sample_summaries": [sample_summary],
                     "unreadable_count": 0,
                     "sampled_paths_count": 1,
-                    "shapes": [(int(meta.get("width")), int(meta.get("height")))] if meta else [],
+                    "shapes": (
+                        [(int(meta.get("width")), int(meta.get("height")))]
+                        if meta
+                        else []
+                    ),
                     "channels": [meta.get("channels")] if meta else [],
                     "min_entropy": ent,
                     "max_entropy": ent,
@@ -391,13 +425,19 @@ def analyze_dataset(dataset_input: Any, sample_limit: int = 200) -> Dict[str, An
                     if not f.is_file():
                         continue
                     # skip hidden / temp paths heuristically
-                    if _is_probable_temp_or_hidden(f) or _is_probable_temp_or_hidden(f.parent):
+                    if _is_probable_temp_or_hidden(f) or _is_probable_temp_or_hidden(
+                        f.parent
+                    ):
                         logger.debug("Skipping probable temp/hidden file: %s", f)
                         continue
                     if f.suffix and f.suffix.lower() in exts:
                         items.append(f)
                 except Exception:
-                    logger.debug("Error inspecting file during dataset scan: %s", f, exc_info=True)
+                    logger.debug(
+                        "Error inspecting file during dataset scan: %s",
+                        f,
+                        exc_info=True,
+                    )
             items = items[:sample_limit]
 
         elif isinstance(dataset_input, Iterable):
@@ -432,8 +472,12 @@ def analyze_dataset(dataset_input: Any, sample_limit: int = 200) -> Dict[str, An
         if image_count == 0:
             return {"error": "No readable images in dataset"}
 
-        avg_entropy = round(sum(entropy_vals) / len(entropy_vals), 3) if entropy_vals else None
-        most_common_shape, most_common_count = shape_counter.most_common(1)[0] if shape_counter else (None, 0)
+        avg_entropy = (
+            round(sum(entropy_vals) / len(entropy_vals), 3) if entropy_vals else None
+        )
+        most_common_shape, most_common_count = (
+            shape_counter.most_common(1)[0] if shape_counter else (None, 0)
+        )
 
         return {
             "image_count": image_count,
@@ -446,7 +490,11 @@ def analyze_dataset(dataset_input: Any, sample_limit: int = 200) -> Dict[str, An
             "unreadable_count": unreadable,
             "sampled_paths_count": len(items),
             # convenience fields
-            "shapes": [tuple(map(int, s.split("x"))) for s in shape_counter.keys()] if shape_counter else [],
+            "shapes": (
+                [tuple(map(int, s.split("x"))) for s in shape_counter.keys()]
+                if shape_counter
+                else []
+            ),
             "channels": list(channels_counter.keys()),
             "min_entropy": min(entropy_vals) if entropy_vals else None,
             "max_entropy": max(entropy_vals) if entropy_vals else None,

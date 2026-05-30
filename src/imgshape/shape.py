@@ -11,7 +11,6 @@ from typing import Tuple, List, Union, Dict
 from pathlib import Path
 from PIL import Image
 
-
 SUPPORTED_EXTS = (".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff", ".webp")
 
 

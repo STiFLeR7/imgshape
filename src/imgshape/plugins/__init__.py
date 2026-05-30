@@ -3,6 +3,7 @@
 Plugin architecture for imgshape v3.0.0
 Allows drop-in analyzers, recommenders, exporters.
 """
+
 from __future__ import annotations
 import importlib.util
 from pathlib import Path
@@ -39,6 +40,10 @@ def load_plugins_from_dir(path: str) -> List[PluginBase]:
         spec.loader.exec_module(module)  # type: ignore
         for attr in dir(module):
             obj = getattr(module, attr)
-            if isinstance(obj, type) and issubclass(obj, PluginBase) and obj is not PluginBase:
+            if (
+                isinstance(obj, type)
+                and issubclass(obj, PluginBase)
+                and obj is not PluginBase
+            ):
                 plugins.append(obj())
     return plugins

@@ -21,7 +21,9 @@ import logging
 logger = logging.getLogger("imgshape.augmentations")
 if not logger.handlers:
     ch = logging.StreamHandler()
-    ch.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s"))
+    ch.setFormatter(
+        logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s")
+    )
     logger.addHandler(ch)
 logger.setLevel(logging.INFO)
 

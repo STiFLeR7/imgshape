@@ -1,7 +1,5 @@
-# tests/test_torchloader.py
 import sys
 import types
-import pytest
 
 from imgshape.torchloader import to_torch_transform
 
@@ -15,6 +13,7 @@ def test_to_torch_transform_with_fake_torchvision(monkeypatch):
     class FakeCompose:
         def __init__(self, items=None):
             self.items = items or []
+
         def __call__(self, x):  # make it callable
             return x
 
@@ -27,9 +26,14 @@ def test_to_torch_transform_with_fake_torchvision(monkeypatch):
     fake_T.Normalize = lambda mean, std: ("norm", mean, std)
 
     monkeypatch.setitem(sys.modules, "torchvision.transforms", fake_T)
-    monkeypatch.setitem(sys.modules, "torchvision", types.SimpleNamespace(transforms=fake_T))
+    monkeypatch.setitem(
+        sys.modules, "torchvision", types.SimpleNamespace(transforms=fake_T)
+    )
 
-    plan = {"order": [], "augmentations": [{"name": "RandomHorizontalFlip", "params": {"p": 0.3}}]}
+    plan = {
+        "order": [],
+        "augmentations": [{"name": "RandomHorizontalFlip", "params": {"p": 0.3}}],
+    }
     preprocessing = {"normalize": {"mean": [0.5], "std": [0.5]}}
 
     tfm = to_torch_transform(plan, preprocessing)

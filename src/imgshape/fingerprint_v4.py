@@ -18,7 +18,6 @@ from typing import Dict, List, Optional, Any, Tuple
 from pathlib import Path
 from dataclasses import dataclass, asdict, field
 from enum import Enum
-import math
 
 import numpy as np
 from PIL import Image, ImageStat
@@ -27,6 +26,7 @@ from imgshape.semantic_v4 import SemanticExtractor
 
 try:
     import torch
+
     TORCH_AVAILABLE = True
 except ImportError:
     TORCH_AVAILABLE = False
@@ -38,10 +38,12 @@ logger = logging.getLogger("imgshape.fingerprint_v4")
 # GPU Acceleration Handler
 # ============================================================================
 
+
 class GPUHandler:
     """
     Utility to handle GPU availability and detection.
     """
+
     @staticmethod
     def is_cuda_available() -> bool:
         if not TORCH_AVAILABLE:
@@ -57,8 +59,10 @@ class GPUHandler:
 # Enumerations for Profile Classifications
 # ============================================================================
 
+
 class ResizeRisk(Enum):
     """Risk level for resizing operations"""
+
     LOW = "low"
     MEDIUM = "medium"
     HIGH = "high"
@@ -66,6 +70,7 @@ class ResizeRisk(Enum):
 
 class GeometryClass(Enum):
     """Classification of geometric diversity"""
+
     UNIFORM = "uniform"
     DIVERSE = "diverse"
     EXTREME = "extreme"
@@ -73,6 +78,7 @@ class GeometryClass(Enum):
 
 class CapacityCeiling(Enum):
     """Maximum recommended model capacity"""
+
     LIGHTWEIGHT = "lightweight"
     STANDARD = "standard"
     HEAVY = "heavy"
@@ -81,6 +87,7 @@ class CapacityCeiling(Enum):
 
 class InformationDensity(Enum):
     """Information density classification"""
+
     SPARSE = "sparse"
     MODERATE = "moderate"
     DENSE = "dense"
@@ -89,6 +96,7 @@ class InformationDensity(Enum):
 
 class ClassBalanceType(Enum):
     """Class balance classification"""
+
     BALANCED = "balanced"
     SLIGHTLY_IMBALANCED = "slightly_imbalanced"
     HIGHLY_IMBALANCED = "highly_imbalanced"
@@ -98,6 +106,7 @@ class ClassBalanceType(Enum):
 
 class SamplingStrategy(Enum):
     """Recommended sampling strategy"""
+
     UNIFORM = "uniform"
     WEIGHTED = "weighted"
     OVERSAMPLING = "oversampling"
@@ -106,6 +115,7 @@ class SamplingStrategy(Enum):
 
 class LossRecommendation(Enum):
     """Recommended loss function"""
+
     CROSS_ENTROPY = "cross_entropy"
     FOCAL_LOSS = "focal_loss"
     WEIGHTED_CE = "weighted_ce"
@@ -114,6 +124,7 @@ class LossRecommendation(Enum):
 
 class QualityLevel(Enum):
     """Overall quality assessment"""
+
     EXCELLENT = "excellent"
     GOOD = "good"
     ACCEPTABLE = "acceptable"
@@ -123,6 +134,7 @@ class QualityLevel(Enum):
 
 class WarningSeverity(Enum):
     """Warning severity levels"""
+
     INFO = "info"
     WARNING = "warning"
     ERROR = "error"
@@ -131,6 +143,7 @@ class WarningSeverity(Enum):
 
 class WarningCategory(Enum):
     """Warning categories"""
+
     CORRUPTION = "corruption"
     DUPLICATION = "duplication"
     RESOLUTION = "resolution"
@@ -140,6 +153,7 @@ class WarningCategory(Enum):
 
 class PrimaryDomain(Enum):
     """Primary semantic domain"""
+
     PHOTOGRAPHIC = "photographic"
     MEDICAL = "medical"
     DOCUMENT = "document"
@@ -152,6 +166,7 @@ class PrimaryDomain(Enum):
 
 class ContentType(Enum):
     """Content type classification"""
+
     NATURAL = "natural"
     TEXT_DENSE = "text_dense"
     LOW_SIGNAL = "low_signal"
@@ -164,9 +179,11 @@ class ContentType(Enum):
 # Profile Data Classes
 # ============================================================================
 
+
 @dataclass
 class Resolution:
     """Resolution specification"""
+
     width: int
     height: int
 
@@ -180,6 +197,7 @@ class Resolution:
 @dataclass
 class AspectRatioCluster:
     """Clustered aspect ratios found in the dataset"""
+
     ratio: float
     frequency: float
 
@@ -187,6 +205,7 @@ class AspectRatioCluster:
 @dataclass
 class SpatialProfile:
     """Geometric constraints and resizing risk assessment"""
+
     resolution_range: Dict[str, Resolution]
     aspect_ratio_variance: float
     resize_risk: ResizeRisk
@@ -197,6 +216,7 @@ class SpatialProfile:
 @dataclass
 class EntropyStats:
     """Entropy statistics"""
+
     mean: float
     std: float
     range: Dict[str, float]  # min, max
@@ -205,6 +225,7 @@ class EntropyStats:
 @dataclass
 class EntropyStabilityIndex:
     """Measures how stable/consistent entropy is across the dataset"""
+
     score: float  # 0.0 to 1.0
     is_stable: bool
 
@@ -212,6 +233,7 @@ class EntropyStabilityIndex:
 @dataclass
 class ColorHistogram:
     """Compact color distribution signature"""
+
     bins: List[int]
     channels: List[str]
 
@@ -219,6 +241,7 @@ class ColorHistogram:
 @dataclass
 class SignalProfile:
     """Information density and noise characteristics"""
+
     entropy: EntropyStats
     noise_estimate: float
     capacity_ceiling: CapacityCeiling
@@ -231,6 +254,7 @@ class SignalProfile:
 @dataclass
 class ClassBalance:
     """Class balance information"""
+
     type: ClassBalanceType
     imbalance_ratio: float
     class_count: int
@@ -239,6 +263,7 @@ class ClassBalance:
 @dataclass
 class DistributionProfile:
     """Dataset structure and imbalance characteristics"""
+
     class_balance: ClassBalance
     sampling_strategy: SamplingStrategy
     loss_recommendation: LossRecommendation
@@ -247,6 +272,7 @@ class DistributionProfile:
 @dataclass
 class QualityWarning:
     """Quality warning"""
+
     severity: WarningSeverity
     category: WarningCategory
     message: str
@@ -256,6 +282,7 @@ class QualityWarning:
 @dataclass
 class QualityProfile:
     """Trustworthiness and data quality assessment"""
+
     overall_quality: QualityLevel
     warnings: List[QualityWarning]
     corruption_rate: float
@@ -265,6 +292,7 @@ class QualityProfile:
 @dataclass
 class SemanticProfile:
     """Semantic classification that gates decision branches"""
+
     primary_domain: PrimaryDomain
     content_type: ContentType
     characteristics: List[str]
@@ -275,6 +303,7 @@ class SemanticProfile:
 @dataclass
 class MedicalProfile:
     """Specialized metrics for medical imaging (DICOM/NIfTI)"""
+
     hu_range: Tuple[float, float]
     slice_consistency: float
 
@@ -282,6 +311,7 @@ class MedicalProfile:
 @dataclass
 class SatelliteProfile:
     """Specialized metrics for remote sensing and satellite imagery"""
+
     gsd_estimate: float  # Ground Sample Distance
     cloud_cover_estimate: float
 
@@ -289,6 +319,7 @@ class SatelliteProfile:
 @dataclass
 class OCRProfile:
     """Specialized metrics for document analysis and OCR"""
+
     text_density: float
     orientation_variance: float
 
@@ -297,10 +328,11 @@ class OCRProfile:
 class DatasetFingerprint:
     """
     Complete dataset fingerprint (v4.2).
-    
+
     This is the canonical semantic identity of a dataset.
     It is stable, deterministic, and schema-versioned.
     """
+
     schema_version: str
     dataset_uri: str
     profiles: Dict[str, Any]  # spatial, signal, distribution, quality, semantic
@@ -320,10 +352,13 @@ class DatasetFingerprint:
         if isinstance(obj, Enum):
             return obj.value
         elif isinstance(obj, dict):
-            return {k: DatasetFingerprint._convert_enums_to_strings(v) for k, v in obj.items()}
+            return {
+                k: DatasetFingerprint._convert_enums_to_strings(v)
+                for k, v in obj.items()
+            }
         elif isinstance(obj, list):
             return [DatasetFingerprint._convert_enums_to_strings(item) for item in obj]
-        elif hasattr(obj, '__dict__'):
+        elif hasattr(obj, "__dict__"):
             return DatasetFingerprint._convert_enums_to_strings(asdict(obj))
         return obj
 
@@ -332,10 +367,11 @@ class DatasetFingerprint:
 # Fingerprint Extractor
 # ============================================================================
 
+
 class FingerprintExtractor:
     """
     Deterministic fingerprint extraction from image datasets.
-    
+
     This class implements the core fingerprint extraction logic according to
     the v4.2 specification (Atlas Bento). It computes all five profile types and derives
     the canonical dataset class.
@@ -345,11 +381,11 @@ class FingerprintExtractor:
         self,
         sample_limit: Optional[int] = None,
         use_gpu: bool = False,
-        batch_size: int = 32
+        batch_size: int = 32,
     ):
         """
         Initialize fingerprint extractor.
-        
+
         Args:
             sample_limit: Optional limit on number of images to analyze
             use_gpu: Whether to use GPU acceleration for entropy and blur
@@ -359,7 +395,7 @@ class FingerprintExtractor:
         self.use_gpu = use_gpu and TORCH_AVAILABLE
         self.batch_size = batch_size
         self.logger = logger
-        
+
         # Initialize semantic extractor for latent embeddings (v4.1)
         self.semantic_extractor = None
         if TORCH_AVAILABLE:
@@ -367,35 +403,37 @@ class FingerprintExtractor:
                 self.semantic_extractor = SemanticExtractor()
             except Exception as e:
                 self.logger.warning(f"Failed to initialize SemanticExtractor: {e}")
-        
+
         if use_gpu and not TORCH_AVAILABLE:
-            self.logger.warning("GPU acceleration requested but PyTorch is not installed. Falling back to CPU.")
+            self.logger.warning(
+                "GPU acceleration requested but PyTorch is not installed. Falling back to CPU."
+            )
 
     def extract(self, dataset_path: Path) -> DatasetFingerprint:
         """
         Extract fingerprint from a dataset.
-        
+
         Args:
             dataset_path: Path to dataset directory or image list
-            
+
         Returns:
             DatasetFingerprint object containing all profiles
         """
         # Collect image data
         images = self._collect_images(dataset_path)
-        
+
         if not images:
             raise ValueError(f"No valid images found at {dataset_path}")
-        
+
         self.logger.info(f"Analyzing {len(images)} images from {dataset_path}")
-        
+
         # Extract all profiles
         spatial = self._compute_spatial_profile(images)
         signal = self._compute_signal_profile(images)
         distribution = self._compute_distribution_profile(images)
         quality = self._compute_quality_profile(images)
         semantic = self._compute_semantic_profile(images, spatial, signal)
-        
+
         # Compute specialized profile if applicable
         specialized = None
         if semantic.primary_domain == PrimaryDomain.MEDICAL:
@@ -404,26 +442,28 @@ class FingerprintExtractor:
             specialized = self._compute_satellite_profile(images)
         elif semantic.primary_domain == PrimaryDomain.OCR:
             specialized = self._compute_ocr_profile(images)
-        
+
         # Derive canonical class
-        derived_class, confidence = self._derive_class(spatial, signal, distribution, quality, semantic)
-        
+        derived_class, confidence = self._derive_class(
+            spatial, signal, distribution, quality, semantic
+        )
+
         # Generate dataset URI
         dataset_uri = self._generate_uri(derived_class)
-        
+
         # Build profiles dictionary
         profiles = {
             "spatial": spatial,
             "signal": signal,
             "distribution": distribution,
             "quality": quality,
-            "semantic": semantic
+            "semantic": semantic,
         }
-        
+
         # Add specialized profile if found
         if specialized:
             profiles[semantic.primary_domain.value] = specialized
-            
+
         # Build fingerprint
         fingerprint = DatasetFingerprint(
             schema_version="4.2",  # Updated for v4.2
@@ -434,37 +474,40 @@ class FingerprintExtractor:
             metadata={
                 "sample_count": len(images),
                 "imgshape_version": "4.2.0",
-                "acceleration": "gpu" if GPUHandler.is_cuda_available() else "cpu"
-            }
+                "acceleration": "gpu" if GPUHandler.is_cuda_available() else "cpu",
+            },
         )
-        
+
         return fingerprint
 
     def _collect_images(self, dataset_path: Path) -> List[Dict[str, Any]]:
         """
         Collect image metadata and statistics.
-        
+
         Returns list of dicts with: path, size, entropy, etc.
         """
         images = []
-        
+
         handler = None
         if self.use_gpu:
             try:
                 from imgshape.gpu_v4 import BatchedGPUHandler
+
                 handler = BatchedGPUHandler(self.batch_size)
             except (ImportError, RuntimeError) as e:
-                self.logger.warning(f"Failed to initialize GPU handler: {e}. Falling back to CPU.")
+                self.logger.warning(
+                    f"Failed to initialize GPU handler: {e}. Falling back to CPU."
+                )
                 self.use_gpu = False
-                
+
         pending_batch = []
-        
+
         def process_batch_results(batch_results, batch_metadata):
             for res, meta in zip(batch_results, batch_metadata):
-                meta['entropy'] = res['entropy']
-                meta['blur_score'] = res['blur']
-                if '_img_array' in meta:
-                    del meta['_img_array']
+                meta["entropy"] = res["entropy"]
+                meta["blur_score"] = res["blur"]
+                if "_img_array" in meta:
+                    del meta["_img_array"]
 
         if dataset_path.is_file():
             # Single image
@@ -472,7 +515,7 @@ class FingerprintExtractor:
             if img_data:
                 images.append(img_data)
                 if handler:
-                    results = handler.add_image(img_data['_img_array'])
+                    results = handler.add_image(img_data["_img_array"])
                     if results:
                         process_batch_results(results, [img_data])
                     else:
@@ -482,36 +525,36 @@ class FingerprintExtractor:
         else:
             # Directory
             image_files = self._find_images(dataset_path)
-            
+
             count = 0
             for img_path in image_files:
                 if self.sample_limit and count >= self.sample_limit:
                     break
-                    
+
                 img_data = self._analyze_single_image(img_path, handler)
                 if img_data:
                     images.append(img_data)
                     count += 1
-                    
+
                     if handler:
                         pending_batch.append(img_data)
-                        results = handler.add_image(img_data['_img_array'])
+                        results = handler.add_image(img_data["_img_array"])
                         if results:
                             process_batch_results(results, pending_batch)
                             pending_batch = []
-        
+
         if handler and pending_batch:
             results = handler.flush()
             process_batch_results(results, pending_batch)
-        
+
         return images
 
     def _find_images(self, directory: Path) -> List[Path]:
         """Find all image files in directory"""
-        extensions = {'.jpg', '.jpeg', '.png', '.bmp', '.tiff', '.webp'}
+        extensions = {".jpg", ".jpeg", ".png", ".bmp", ".tiff", ".webp"}
         images = []
         seen = set()
-        
+
         for ext in extensions:
             # Case-insensitive matching is handled differently by OS
             # but we want to be explicit and avoid duplicates
@@ -522,39 +565,47 @@ class FingerprintExtractor:
                     if resolved not in seen:
                         images.append(img_path)
                         seen.add(resolved)
-        
+
         return images
 
-    def _analyze_single_image(self, img_path: Path, handler: Optional[Any] = None) -> Optional[Dict[str, Any]]:
+    def _analyze_single_image(
+        self, img_path: Path, handler: Optional[Any] = None
+    ) -> Optional[Dict[str, Any]]:
         """Analyze a single image and return metadata"""
         try:
             with Image.open(img_path) as img:
                 original_mode = img.mode
                 # Convert to RGB for consistent analysis
-                if img.mode != 'RGB':
-                    img = img.convert('RGB')
-                
+                if img.mode != "RGB":
+                    img = img.convert("RGB")
+
                 # Compute statistics
                 stat = ImageStat.Stat(img)
-                
+
                 # Channel variance
                 variance = stat.var
-                
+
                 # Histogram (bins=256)
-                hist = img.histogram() # Returns List[int], length 256*channels
-                
+                hist = img.histogram()  # Returns List[int], length 256*channels
+
                 # Check if it's effectively grayscale
-                is_grayscale = (original_mode in ('L', 'LA', 'I', 'F'))
-                if not is_grayscale and img.mode == 'RGB':
+                is_grayscale = original_mode in ("L", "LA", "I", "F")
+                if not is_grayscale and img.mode == "RGB":
                     # Check if all channels are same
                     r, g, b = img.split()
-                    if ImageStat.Stat(r).mean == ImageStat.Stat(g).mean == ImageStat.Stat(b).mean:
+                    if (
+                        ImageStat.Stat(r).mean
+                        == ImageStat.Stat(g).mean
+                        == ImageStat.Stat(b).mean
+                    ):
                         # Further check if they are identical
-                        if np.array_equal(np.array(r), np.array(g)) and np.array_equal(np.array(g), np.array(b)):
+                        if np.array_equal(np.array(r), np.array(g)) and np.array_equal(
+                            np.array(g), np.array(b)
+                        ):
                             is_grayscale = True
-                
+
                 img_array = np.array(img)
-                
+
                 if handler:
                     # Skip individual computation
                     entropy = 0.0
@@ -564,24 +615,24 @@ class FingerprintExtractor:
                     entropy = self._compute_entropy(img_array)
                     # Blur detection (Laplacian variance)
                     blur_score = self._compute_blur(img_array)
-                
+
                 result = {
-                    'path': img_path,
-                    'size': (img.width, img.height),
-                    'mode': img.mode,
-                    'is_grayscale': is_grayscale,
-                    'entropy': entropy,
-                    'mean': stat.mean,
-                    'variance': variance,
-                    'extrema': stat.extrema,
-                    'histogram': hist,
-                    'blur_score': blur_score
+                    "path": img_path,
+                    "size": (img.width, img.height),
+                    "mode": img.mode,
+                    "is_grayscale": is_grayscale,
+                    "entropy": entropy,
+                    "mean": stat.mean,
+                    "variance": variance,
+                    "extrema": stat.extrema,
+                    "histogram": hist,
+                    "blur_score": blur_score,
                 }
-                
+
                 if handler:
                     # Store array temporarily for batching
-                    result['_img_array'] = img_array
-                    
+                    result["_img_array"] = img_array
+
                 return result
         except Exception as e:
             self.logger.warning(f"Failed to analyze {img_path}: {e}")
@@ -624,8 +675,12 @@ class FingerprintExtractor:
             try:
                 t_gray = torch.from_numpy(gray).to("cuda").unsqueeze(0).unsqueeze(0)
                 # Laplacian kernel
-                laplacian_kernel = torch.tensor([[0, 1, 0], [1, -4, 1], [0, 1, 0]], 
-                                               device="cuda").float().unsqueeze(0).unsqueeze(0)
+                laplacian_kernel = (
+                    torch.tensor([[0, 1, 0], [1, -4, 1], [0, 1, 0]], device="cuda")
+                    .float()
+                    .unsqueeze(0)
+                    .unsqueeze(0)
+                )
                 # Convolve
                 laplacian = torch.nn.functional.conv2d(t_gray, laplacian_kernel)
                 # Variance of Laplacian
@@ -638,25 +693,26 @@ class FingerprintExtractor:
         # Using a simple 3x3 kernel
         kernel = np.array([[0, 1, 0], [1, -4, 1], [0, 1, 0]])
         from scipy.signal import convolve2d
-        laplacian = convolve2d(gray, kernel, mode='same')
+
+        laplacian = convolve2d(gray, kernel, mode="same")
         blur_score = np.var(laplacian)
         return float(blur_score)
 
     def _compute_spatial_profile(self, images: List[Dict[str, Any]]) -> SpatialProfile:
         """Compute spatial profile from image data"""
-        sizes = [img['size'] for img in images]
+        sizes = [img["size"] for img in images]
         widths = [s[0] for s in sizes]
         heights = [s[1] for s in sizes]
         aspect_ratios = [w / h for w, h in sizes]
-        
+
         # Resolution range
         min_res = Resolution(min(widths), min(heights))
         max_res = Resolution(max(widths), max(heights))
         median_res = Resolution(int(np.median(widths)), int(np.median(heights)))
-        
+
         # Aspect ratio variance
         ar_variance = float(np.var(aspect_ratios))
-        
+
         # Determine geometry class
         if ar_variance < 0.01:
             geometry_class = GeometryClass.UNIFORM
@@ -664,7 +720,7 @@ class FingerprintExtractor:
             geometry_class = GeometryClass.DIVERSE
         else:
             geometry_class = GeometryClass.EXTREME
-        
+
         # Determine resize risk
         area_variance = np.var([w * h for w, h in sizes])
         if area_variance < 10000 and ar_variance < 0.01:
@@ -673,43 +729,39 @@ class FingerprintExtractor:
             resize_risk = ResizeRisk.MEDIUM
         else:
             resize_risk = ResizeRisk.HIGH
-        
+
         # Aspect Ratio Clustering (v4.1)
-        ars = [round(w/h, 2) for w, h in [s for s in sizes]]
+        ars = [round(w / h, 2) for w, h in [s for s in sizes]]
         unique_ars, ar_counts = np.unique(ars, return_counts=True)
         ar_clusters = [
-            AspectRatioCluster(ratio=float(r), frequency=float(f/len(images)))
+            AspectRatioCluster(ratio=float(r), frequency=float(f / len(images)))
             for r, f in zip(unique_ars, ar_counts)
         ]
         # Sort by frequency
         ar_clusters = sorted(ar_clusters, key=lambda x: x.frequency, reverse=True)[:5]
-        
+
         return SpatialProfile(
-            resolution_range={
-                'min': min_res,
-                'max': max_res,
-                'median': median_res
-            },
+            resolution_range={"min": min_res, "max": max_res, "median": median_res},
             aspect_ratio_variance=ar_variance,
             resize_risk=resize_risk,
             geometry_class=geometry_class,
-            aspect_ratio_clusters=ar_clusters
+            aspect_ratio_clusters=ar_clusters,
         )
 
     def _compute_signal_profile(self, images: List[Dict[str, Any]]) -> SignalProfile:
         """Compute signal profile from image data"""
-        entropies = [img['entropy'] for img in images]
-        
+        entropies = [img["entropy"] for img in images]
+
         entropy_stats = EntropyStats(
             mean=float(np.mean(entropies)),
             std=float(np.std(entropies)),
-            range={'min': float(min(entropies)), 'max': float(max(entropies))}
+            range={"min": float(min(entropies)), "max": float(max(entropies))},
         )
-        
+
         # Estimate noise from variance
-        variances = [np.mean(img['variance']) for img in images]
+        variances = [np.mean(img["variance"]) for img in images]
         noise_estimate = min(1.0, float(np.mean(variances)) / 10000.0)
-        
+
         # Determine information density
         mean_entropy = entropy_stats.mean
         if mean_entropy < 5:
@@ -720,7 +772,7 @@ class FingerprintExtractor:
             info_density = InformationDensity.DENSE
         else:
             info_density = InformationDensity.VERY_DENSE
-        
+
         # Determine capacity ceiling
         if mean_entropy < 6 and noise_estimate < 0.3:
             capacity = CapacityCeiling.LIGHTWEIGHT
@@ -730,39 +782,35 @@ class FingerprintExtractor:
             capacity = CapacityCeiling.HEAVY
         else:
             capacity = CapacityCeiling.UNLIMITED
-        
+
         # Entropy Stability (v4.1)
         entropy_score = 1.0 - min(1.0, entropy_stats.std / (entropy_stats.mean + 1e-6))
         entropy_stability = EntropyStabilityIndex(
-            score=float(entropy_score),
-            is_stable=entropy_score > 0.8
+            score=float(entropy_score), is_stable=entropy_score > 0.8
         )
-        
+
         # Channel Variance (v4.1)
-        avg_channel_variances = np.mean([img['variance'] for img in images], axis=0)
+        avg_channel_variances = np.mean([img["variance"] for img in images], axis=0)
         channel_var_dict = {
-            'R': float(avg_channel_variances[0]),
-            'G': float(avg_channel_variances[1]),
-            'B': float(avg_channel_variances[2])
+            "R": float(avg_channel_variances[0]),
+            "G": float(avg_channel_variances[1]),
+            "B": float(avg_channel_variances[2]),
         }
-        
+
         # Color Histogram (v4.1)
         # Average histograms and downsample for compactness
-        all_histograms = [img['histogram'] for img in images]
+        all_histograms = [img["histogram"] for img in images]
         avg_hist = np.mean(all_histograms, axis=0)
         # Downsample to 16 bins per channel (compact signature)
         compact_bins = []
         for i in range(3):
-            c_hist = avg_hist[i*256 : (i+1)*256]
+            c_hist = avg_hist[i * 256 : (i + 1) * 256]
             # Sum into 16 bins
-            resampled = [int(sum(c_hist[j*16 : (j+1)*16])) for j in range(16)]
+            resampled = [int(sum(c_hist[j * 16 : (j + 1) * 16])) for j in range(16)]
             compact_bins.extend(resampled)
-            
-        color_hist = ColorHistogram(
-            bins=compact_bins,
-            channels=['R', 'G', 'B']
-        )
-        
+
+        color_hist = ColorHistogram(bins=compact_bins, channels=["R", "G", "B"])
+
         return SignalProfile(
             entropy=entropy_stats,
             noise_estimate=noise_estimate,
@@ -770,51 +818,53 @@ class FingerprintExtractor:
             information_density=info_density,
             channel_variance=channel_var_dict,
             color_histogram=color_hist,
-            entropy_stability=entropy_stability
+            entropy_stability=entropy_stability,
         )
 
-    def _compute_distribution_profile(self, images: List[Dict[str, Any]]) -> DistributionProfile:
+    def _compute_distribution_profile(
+        self, images: List[Dict[str, Any]]
+    ) -> DistributionProfile:
         """Compute distribution profile from image data"""
         # For now, assume unlabeled dataset (class_count=0)
         # In full implementation, this would analyze directory structure or labels
-        
+
         class_balance = ClassBalance(
-            type=ClassBalanceType.UNKNOWN,
-            imbalance_ratio=1.0,
-            class_count=0
+            type=ClassBalanceType.UNKNOWN, imbalance_ratio=1.0, class_count=0
         )
-        
+
         sampling_strategy = SamplingStrategy.UNIFORM
         loss_recommendation = LossRecommendation.CROSS_ENTROPY
-        
+
         return DistributionProfile(
             class_balance=class_balance,
             sampling_strategy=sampling_strategy,
-            loss_recommendation=loss_recommendation
+            loss_recommendation=loss_recommendation,
         )
 
     def _compute_quality_profile(self, images: List[Dict[str, Any]]) -> QualityProfile:
         """Compute quality profile from image data"""
         warnings = []
-        
+
         # Check for resolution issues
-        sizes = [img['size'] for img in images]
+        sizes = [img["size"] for img in images]
         min_dimension = min([min(s) for s in sizes])
-        
+
         if min_dimension < 32:
-            warnings.append(QualityWarning(
-                severity=WarningSeverity.WARNING,
-                category=WarningCategory.RESOLUTION,
-                message="Very small images detected (< 32px)",
-                affected_count=sum(1 for s in sizes if min(s) < 32)
-            ))
-        
+            warnings.append(
+                QualityWarning(
+                    severity=WarningSeverity.WARNING,
+                    category=WarningCategory.RESOLUTION,
+                    message="Very small images detected (< 32px)",
+                    affected_count=sum(1 for s in sizes if min(s) < 32),
+                )
+            )
+
         # Corruption rate (images that failed to load would not be in list)
         corruption_rate = 0.0
-        
+
         # Duplication rate (simple placeholder - would need perceptual hashing)
         duplication_rate = 0.0
-        
+
         # Overall quality assessment
         if len(warnings) == 0:
             overall_quality = QualityLevel.EXCELLENT
@@ -822,34 +872,36 @@ class FingerprintExtractor:
             overall_quality = QualityLevel.GOOD
         else:
             overall_quality = QualityLevel.ACCEPTABLE
-        
+
         return QualityProfile(
             overall_quality=overall_quality,
             warnings=warnings,
             corruption_rate=corruption_rate,
-            duplication_rate=duplication_rate
+            duplication_rate=duplication_rate,
         )
 
     def _compute_semantic_profile(
-        self, 
+        self,
         images: List[Dict[str, Any]],
         spatial: SpatialProfile,
-        signal: SignalProfile
+        signal: SignalProfile,
     ) -> SemanticProfile:
         """Compute semantic profile using heuristics"""
-        
+
         # Determine primary domain (heuristic-based for now)
         # In full implementation, this could use lightweight classification
-        
+
         # Check for grayscale (medical/document indicator)
-        grayscale_ratio = sum(1 for img in images if img.get('is_grayscale', False)) / len(images)
-        
+        grayscale_ratio = sum(
+            1 for img in images if img.get("is_grayscale", False)
+        ) / len(images)
+
         # Check for high entropy (photographic indicator)
         mean_entropy = signal.entropy.mean
         ar_variance = spatial.aspect_ratio_variance
-        
+
         characteristics = []
-        
+
         if grayscale_ratio > 0.5:
             characteristics.append("grayscale")
             if mean_entropy < 7:
@@ -875,34 +927,36 @@ class FingerprintExtractor:
                 primary_domain = PrimaryDomain.SYNTHETIC
                 content_type = ContentType.STRUCTURED
                 specialization_required = False
-        
+
         # Compute latent embedding (v4.1)
         latent_embedding = None
         if self.semantic_extractor and images:
             try:
                 # Sample up to 10 images for mean embedding
-                sample_indices = np.linspace(0, len(images) - 1, min(10, len(images)), dtype=int)
+                sample_indices = np.linspace(
+                    0, len(images) - 1, min(10, len(images)), dtype=int
+                )
                 embeddings = []
-                
+
                 for idx in sample_indices:
-                    img_path = images[idx]['path']
+                    img_path = images[idx]["path"]
                     with Image.open(img_path) as img:
-                        img_arr = np.array(img.convert('RGB'))
+                        img_arr = np.array(img.convert("RGB"))
                         emb = self.semantic_extractor.extract(img_arr)
                         embeddings.append(emb)
-                
+
                 if embeddings:
                     mean_emb = np.mean(embeddings, axis=0)
                     latent_embedding = mean_emb.tolist()
             except Exception as e:
                 self.logger.warning(f"Failed to compute latent embedding: {e}")
-        
+
         return SemanticProfile(
             primary_domain=primary_domain,
             content_type=content_type,
             characteristics=characteristics,
             specialization_required=specialization_required,
-            latent_embedding=latent_embedding
+            latent_embedding=latent_embedding,
         )
 
     def _compute_medical_profile(self, images: List[Dict[str, Any]]) -> MedicalProfile:
@@ -910,47 +964,53 @@ class FingerprintExtractor:
         all_min = []
         all_max = []
         for img in images:
-            ext = img['extrema']
+            ext = img["extrema"]
             all_min.append(np.min([e[0] for e in ext]))
             all_max.append(np.max([e[1] for e in ext]))
-        
+
         hu_range = (float(np.min(all_min)), float(np.max(all_max)))
-        
-        sizes = [img['size'] for img in images]
+
+        sizes = [img["size"] for img in images]
         size_vars = np.var([s[0] for s in sizes]) + np.var([s[1] for s in sizes])
         slice_consistency = 1.0 / (1.0 + float(size_vars))
-        
+
         return MedicalProfile(hu_range=hu_range, slice_consistency=slice_consistency)
 
-    def _compute_satellite_profile(self, images: List[Dict[str, Any]]) -> SatelliteProfile:
+    def _compute_satellite_profile(
+        self, images: List[Dict[str, Any]]
+    ) -> SatelliteProfile:
         """Compute satellite-specific metrics"""
-        sizes = [img['size'] for img in images]
+        sizes = [img["size"] for img in images]
         avg_dim = np.mean([s[0] + s[1] for s in sizes]) / 2.0
         gsd_estimate = 100.0 / max(1.0, float(avg_dim))
-        
+
         cloud_ratios = []
         for img in images:
-            hist = img['histogram']
+            hist = img["histogram"]
             total_count = sum(hist)
             high_count = 0
             # RGB histogram is 3 * 256
             for c in range(3):
-                high_count += sum(hist[c*256 + 240 : (c+1)*256])
+                high_count += sum(hist[c * 256 + 240 : (c + 1) * 256])
             cloud_ratios.append(high_count / max(1, total_count))
-        
+
         cloud_cover = float(np.mean(cloud_ratios))
-        
-        return SatelliteProfile(gsd_estimate=gsd_estimate, cloud_cover_estimate=cloud_cover)
+
+        return SatelliteProfile(
+            gsd_estimate=gsd_estimate, cloud_cover_estimate=cloud_cover
+        )
 
     def _compute_ocr_profile(self, images: List[Dict[str, Any]]) -> OCRProfile:
         """Compute OCR-specific metrics"""
-        entropies = [img['entropy'] for img in images]
+        entropies = [img["entropy"] for img in images]
         text_density = float(np.mean(entropies)) / 10.0
-        
-        ars = [img['size'][0] / max(1, img['size'][1]) for img in images]
+
+        ars = [img["size"][0] / max(1, img["size"][1]) for img in images]
         orientation_variance = float(np.var(ars))
-        
-        return OCRProfile(text_density=text_density, orientation_variance=orientation_variance)
+
+        return OCRProfile(
+            text_density=text_density, orientation_variance=orientation_variance
+        )
 
     def _derive_class(
         self,
@@ -958,33 +1018,33 @@ class FingerprintExtractor:
         signal: SignalProfile,
         distribution: DistributionProfile,
         quality: QualityProfile,
-        semantic: SemanticProfile
+        semantic: SemanticProfile,
     ) -> Tuple[str, float]:
         """
         Derive canonical dataset class from profiles.
-        
+
         Returns:
             (class_name, confidence)
         """
         # Build class name from semantic profile
         domain = semantic.primary_domain.value
         content = semantic.content_type.value
-        
+
         derived_class = f"vision.{domain}.{content}"
-        
+
         # Compute confidence based on profile consistency
         confidence = 0.9  # Base confidence
-        
+
         # Reduce confidence for quality issues
         if quality.overall_quality in (QualityLevel.POOR, QualityLevel.CRITICAL):
             confidence -= 0.2
-        
+
         # Reduce confidence for mixed characteristics
         if semantic.primary_domain == PrimaryDomain.MIXED:
             confidence -= 0.1
-        
+
         confidence = max(0.0, min(1.0, confidence))
-        
+
         return derived_class, confidence
 
     def _generate_uri(self, derived_class: str) -> str:

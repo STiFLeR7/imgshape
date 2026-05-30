@@ -170,3 +170,9 @@ docs/_build/
 
 .vercel
 .env*.local
+
+temp_tests/
+docs/
+.antigravitycli/
+.todos/
+temp_tests_augmented/

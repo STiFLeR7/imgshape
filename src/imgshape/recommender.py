@@ -28,7 +28,9 @@ import yaml
 logger = logging.getLogger("imgshape.recommender")
 if not logger.handlers:
     ch = logging.StreamHandler()
-    ch.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s"))
+    ch.setFormatter(
+        logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s")
+    )
     logger.addHandler(ch)
 logger.setLevel(logging.INFO)
 
@@ -131,7 +133,9 @@ def interpret_prefs(prefs: Optional[List[str]]) -> Dict[str, str]:
     return out
 
 
-def _deterministic_fallback_preprocessing(user_prefs: Optional[List[str]] = None) -> Dict[str, Any]:
+def _deterministic_fallback_preprocessing(
+    user_prefs: Optional[List[str]] = None,
+) -> Dict[str, Any]:
     return {
         "error": "fallback",
         "message": "Could not compute recommendation; returning safe defaults.",
@@ -140,22 +144,35 @@ def _deterministic_fallback_preprocessing(user_prefs: Optional[List[str]] = None
         "augmentation_plan": {
             "order": ["RandomHorizontalFlip"],
             "augmentations": [
-                {"name": "RandomHorizontalFlip", "params": {"p": 0.5}, "reason": "Default conservative augmentation", "score": 0.4}
+                {
+                    "name": "RandomHorizontalFlip",
+                    "params": {"p": 0.5},
+                    "reason": "Default conservative augmentation",
+                    "score": 0.4,
+                }
             ],
         },
-        "resize": {"size": [224, 224], "method": "bilinear", "suggested_model": "ResNet/MobileNet"},
+        "resize": {
+            "size": [224, 224],
+            "method": "bilinear",
+            "suggested_model": "ResNet/MobileNet",
+        },
         "normalize": {"mean": [0.485, 0.456, 0.406], "std": [0.229, 0.224, 0.225]},
         "mode": "RGB",
     }
 
 
-def _deterministic_fallback_dataset(user_prefs: Optional[List[str]] = None) -> Dict[str, Any]:
+def _deterministic_fallback_dataset(
+    user_prefs: Optional[List[str]] = None,
+) -> Dict[str, Any]:
     return {
         "error": "fallback",
         "message": "Could not analyse dataset; returning fallback summary.",
         "user_prefs": user_prefs or [],
         "dataset_summary": {"image_count": 0, "unique_shapes": {}, "notes": "fallback"},
-        "representative_preprocessing": _deterministic_fallback_preprocessing(user_prefs),
+        "representative_preprocessing": _deterministic_fallback_preprocessing(
+            user_prefs
+        ),
     }
 
 
@@ -191,22 +208,54 @@ def _generate_augmentation_plan_from_stats(stats: Mapping) -> Dict[str, Any]:
     def add(name: str, params: dict, reason: str, score: float):
         if name not in plan["order"]:
             plan["order"].append(name)
-            plan["augmentations"].append({"name": name, "params": params, "reason": reason, "score": round(float(score), 2)})
+            plan["augmentations"].append(
+                {
+                    "name": name,
+                    "params": params,
+                    "reason": reason,
+                    "score": round(float(score), 2),
+                }
+            )
 
     if min_side >= 32:
-        add("RandomHorizontalFlip", {"p": 0.5}, "Default safe flip for many datasets", 0.7)
+        add(
+            "RandomHorizontalFlip",
+            {"p": 0.5},
+            "Default safe flip for many datasets",
+            0.7,
+        )
 
     if min_side >= 96 and image_count > 5:
-        add("RandomRotation", {"degrees": 15}, "Small rotations to increase orientation robustness", 0.6)
+        add(
+            "RandomRotation",
+            {"degrees": 15},
+            "Small rotations to increase orientation robustness",
+            0.6,
+        )
 
     if channels == 3 and (entropy is None or entropy >= 3.0):
-        add("ColorJitter", {"brightness": 0.2, "contrast": 0.2, "saturation": 0.2, "hue": 0.05}, "Color variations", 0.5)
+        add(
+            "ColorJitter",
+            {"brightness": 0.2, "contrast": 0.2, "saturation": 0.2, "hue": 0.05},
+            "Color variations",
+            0.5,
+        )
 
     if entropy is not None and entropy < 2.0:
-        add("RandomAdjustSharpness", {"sharpness_factor": 1.2}, "Low-entropy image adjustments", 0.45)
+        add(
+            "RandomAdjustSharpness",
+            {"sharpness_factor": 1.2},
+            "Low-entropy image adjustments",
+            0.45,
+        )
 
     if min_side >= 224:
-        add("RandomResizedCrop", {"size": 224, "scale": [0.8, 1.0]}, "Resize crop for big images", 0.6)
+        add(
+            "RandomResizedCrop",
+            {"size": 224, "scale": [0.8, 1.0]},
+            "Resize crop for big images",
+            0.6,
+        )
 
     if not plan["augmentations"]:
         add("RandomHorizontalFlip", {"p": 0.5}, "Conservative default", 0.4)
@@ -217,12 +266,16 @@ def _generate_augmentation_plan_from_stats(stats: Mapping) -> Dict[str, Any]:
 # -----------------------
 # Core functional API (backwards-compatible)
 # -----------------------
-def recommend_preprocessing(input_obj: Any, user_prefs: Optional[List[str]] = None) -> Dict[str, Any]:
+def recommend_preprocessing(
+    input_obj: Any, user_prefs: Optional[List[str]] = None
+) -> Dict[str, Any]:
     """Recommend preprocessing for a single image (path/PIL/bytes/file-like)."""
     try:
         pil = _open_image_from_input(input_obj)
         if pil is None:
-            logger.warning("recommend_preprocessing: could not open input as image, returning fallback")
+            logger.warning(
+                "recommend_preprocessing: could not open input as image, returning fallback"
+            )
             return _deterministic_fallback_preprocessing(user_prefs)
 
         stats = _stats_from_pil(pil)
@@ -230,7 +283,9 @@ def recommend_preprocessing(input_obj: Any, user_prefs: Optional[List[str]] = No
         pref_meta = interpret_prefs(user_prefs or [])
 
         try:
-            min_side = min(int(stats.get("avg_width", 224)), int(stats.get("avg_height", 224)))
+            min_side = min(
+                int(stats.get("avg_width", 224)), int(stats.get("avg_height", 224))
+            )
         except Exception:
             min_side = 224
 
@@ -239,22 +294,38 @@ def recommend_preprocessing(input_obj: Any, user_prefs: Optional[List[str]] = No
         # bias-influenced sizing
         if bias == "fast":
             if min_side >= 96:
-                size = [96, 96]; method = "bilinear"; suggested_model = "EfficientNet-B0 (fast)"
+                size = [96, 96]
+                method = "bilinear"
+                suggested_model = "EfficientNet-B0 (fast)"
             else:
-                size = [64, 64]; method = "nearest"; suggested_model = "TinyNet (very fast)"
+                size = [64, 64]
+                method = "nearest"
+                suggested_model = "TinyNet (very fast)"
         elif bias == "small":
-            size = [96, 96] if min_side >= 96 else [64, 64]; method = "bilinear"; suggested_model = "MobileNetV2 (edge)"
+            size = [96, 96] if min_side >= 96 else [64, 64]
+            method = "bilinear"
+            suggested_model = "MobileNetV2 (edge)"
         elif bias == "quality":
-            size = [224, 224] if min_side >= 224 else [128, 128]; method = "bilinear"; suggested_model = "ResNet50 / EfficientNet-Lite (quality)"
+            size = [224, 224] if min_side >= 224 else [128, 128]
+            method = "bilinear"
+            suggested_model = "ResNet50 / EfficientNet-Lite (quality)"
         else:
             if min_side >= 224:
-                size = [224, 224]; method = "bilinear"; suggested_model = "ResNet18 / MobileNetV2"
+                size = [224, 224]
+                method = "bilinear"
+                suggested_model = "ResNet18 / MobileNetV2"
             elif min_side >= 96:
-                size = [96, 96]; method = "bilinear"; suggested_model = "EfficientNet-B0 (small)"
+                size = [96, 96]
+                method = "bilinear"
+                suggested_model = "EfficientNet-B0 (small)"
             elif min_side <= 32:
-                size = [32, 32]; method = "nearest"; suggested_model = "TinyNet / CIFAR style"
+                size = [32, 32]
+                method = "nearest"
+                suggested_model = "TinyNet / CIFAR style"
             else:
-                size = [128, 128]; method = "bilinear"; suggested_model = "General-purpose (mid)"
+                size = [128, 128]
+                method = "bilinear"
+                suggested_model = "General-purpose (mid)"
 
         # tweak augmentation scores a bit by bias
         if bias == "quality":
@@ -272,7 +343,11 @@ def recommend_preprocessing(input_obj: Any, user_prefs: Optional[List[str]] = No
             "user_prefs": user_prefs or [],
             "bias": bias,
             "augmentation_plan": plan,
-            "resize": {"size": size, "method": method, "suggested_model": suggested_model},
+            "resize": {
+                "size": size,
+                "method": method,
+                "suggested_model": suggested_model,
+            },
             "normalize": {"mean": mean, "std": std},
             "mode": "RGB" if channels == 3 else "Grayscale",
             "entropy": stats.get("entropy_mean"),
@@ -284,7 +359,9 @@ def recommend_preprocessing(input_obj: Any, user_prefs: Optional[List[str]] = No
         return _deterministic_fallback_preprocessing(user_prefs)
 
 
-def recommend_dataset(dataset_input: Any, sample_limit: int = 200, user_prefs: Optional[List[str]] = None) -> Dict[str, Any]:
+def recommend_dataset(
+    dataset_input: Any, sample_limit: int = 200, user_prefs: Optional[List[str]] = None
+) -> Dict[str, Any]:
     """
     Dataset-level recommender that ALWAYS returns:
     { "user_prefs": [...], "dataset_summary": {...}, "representative_preprocessing": {...} }
@@ -296,7 +373,9 @@ def recommend_dataset(dataset_input: Any, sample_limit: int = 200, user_prefs: O
             p = Path(dataset_input).expanduser().resolve()
             logger.info("recommend_dataset: resolved dataset path -> %s", p)
             if not p.exists() or not p.is_dir():
-                logger.warning("recommend_dataset: invalid dataset path: %s", dataset_input)
+                logger.warning(
+                    "recommend_dataset: invalid dataset path: %s", dataset_input
+                )
                 return _deterministic_fallback_dataset(user_prefs)
             exts = {".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff", ".webp", ".gif"}
             for f in sorted(p.rglob("*")):
@@ -305,7 +384,9 @@ def recommend_dataset(dataset_input: Any, sample_limit: int = 200, user_prefs: O
         elif isinstance(dataset_input, Iterable):
             images = list(dataset_input)[:sample_limit]
         else:
-            logger.warning("recommend_dataset: unsupported input type %r", type(dataset_input))
+            logger.warning(
+                "recommend_dataset: unsupported input type %r", type(dataset_input)
+            )
             return _deterministic_fallback_dataset(user_prefs)
 
         sampled_paths_count = len(images)
@@ -343,8 +424,14 @@ def recommend_dataset(dataset_input: Any, sample_limit: int = 200, user_prefs: O
             logger.warning("recommend_dataset: no readable images after scanning")
             return _deterministic_fallback_dataset(user_prefs)
 
-        avg_entropy = round(float(sum(entropy_vals) / len(entropy_vals)), 3) if entropy_vals else None
-        most_common_shape, most_common_count = shape_counter.most_common(1)[0] if shape_counter else (None, 0)
+        avg_entropy = (
+            round(float(sum(entropy_vals) / len(entropy_vals)), 3)
+            if entropy_vals
+            else None
+        )
+        most_common_shape, most_common_count = (
+            shape_counter.most_common(1)[0] if shape_counter else (None, 0)
+        )
         channels = sorted(list(channels_set)) if channels_set else [3]
 
         stats = {
@@ -385,13 +472,23 @@ class RecommendEngine:
         engine = RecommendEngine(profile="imagenet-small")
         rec = engine.recommend_from_image(pil_img)
         rec2 = engine.recommend_from_dataset("assets/sample_images")
-        rec3 = engine.recommend_from_bytes(open("img.jpg","rb").read())
-        rec4 = engine.recommend_from_analysis({"avg_width":32, "avg_height":32, "channels":3, "entropy_mean":4.0})
+        rec3 = engine.recommend_from_bytes(
+            open("img.jpg", "rb").read()
+        )
+        rec4 = engine.recommend_from_analysis(
+            {
+                "avg_width": 32,
+                "avg_height": 32,
+                "channels": 3,
+                "entropy_mean": 4.0,
+            }
+        )
     """
 
     def __init__(self, profile: Optional[Union[str, Dict[str, Any]]] = None):
         """
-        profile: either a dict (already parsed profile) or a filename (in src/imgshape/profiles/) or None.
+        profile: either a dict (already parsed profile), a filename in the
+        profiles directory (e.g. "imagenet-small"), or None.
         If a string and matches a YAML in src/imgshape/profiles, it will be loaded.
         """
         self.profile = None
@@ -405,26 +502,41 @@ class RecommendEngine:
                 try:
                     self.profile = yaml.safe_load(p.read_text(encoding="utf-8"))
                 except Exception:
-                    logger.debug("Failed to parse provided profile path %s", p, exc_info=True)
+                    logger.debug(
+                        "Failed to parse provided profile path %s", p, exc_info=True
+                    )
             else:
                 # try package-relative
-                pkg_profiles = Path(__file__).resolve().parent.joinpath("profiles").joinpath(profile)
+                pkg_profiles = (
+                    Path(__file__)
+                    .resolve()
+                    .parent.joinpath("profiles")
+                    .joinpath(profile)
+                )
                 if pkg_profiles.exists():
                     try:
-                        self.profile = yaml.safe_load(pkg_profiles.read_text(encoding="utf-8"))
+                        self.profile = yaml.safe_load(
+                            pkg_profiles.read_text(encoding="utf-8")
+                        )
                     except Exception:
-                        logger.debug("Failed to parse profile %s", pkg_profiles, exc_info=True)
+                        logger.debug(
+                            "Failed to parse profile %s", pkg_profiles, exc_info=True
+                        )
         # else None -> no profile
 
     # ---- single-image entrypoints ----
-    def recommend_from_image(self, pil: Image.Image, user_prefs: Optional[List[str]] = None) -> Dict[str, Any]:
+    def recommend_from_image(
+        self, pil: Image.Image, user_prefs: Optional[List[str]] = None
+    ) -> Dict[str, Any]:
         try:
             return recommend_preprocessing(pil, user_prefs=user_prefs)
         except Exception:
             logger.exception("RecommendEngine.recommend_from_image failed")
             return _deterministic_fallback_preprocessing(user_prefs)
 
-    def recommend_from_bytes(self, b: Union[bytes, BytesIO], user_prefs: Optional[List[str]] = None) -> Dict[str, Any]:
+    def recommend_from_bytes(
+        self, b: Union[bytes, BytesIO], user_prefs: Optional[List[str]] = None
+    ) -> Dict[str, Any]:
         try:
             if isinstance(b, BytesIO):
                 b.seek(0)
@@ -439,7 +551,9 @@ class RecommendEngine:
             logger.exception("RecommendEngine.recommend_from_bytes failed")
             return _deterministic_fallback_preprocessing(user_prefs)
 
-    def recommend_from_analysis(self, analysis: Dict[str, Any], user_prefs: Optional[List[str]] = None) -> Dict[str, Any]:
+    def recommend_from_analysis(
+        self, analysis: Dict[str, Any], user_prefs: Optional[List[str]] = None
+    ) -> Dict[str, Any]:
         """
         Accept an analysis dict (e.g. produced by analyze_type / analyze_dataset)
         and convert to a preprocessing recommendation deterministically.
@@ -448,13 +562,37 @@ class RecommendEngine:
             # Build a minimal stats dict compatible with _generate_augmentation_plan_from_stats
             stats: Dict[str, Any] = {}
             # prefer explicit keys if present
-            if "avg_width" in analysis or "avg_height" in analysis or "channels" in analysis:
-                stats["avg_width"] = analysis.get("avg_width", analysis.get("resolution_mean", [None, None])[0] if isinstance(analysis.get("resolution_mean"), (list, tuple)) else None)
-                stats["avg_height"] = analysis.get("avg_height", analysis.get("resolution_mean", [None, None])[1] if isinstance(analysis.get("resolution_mean"), (list, tuple)) else None)
+            if (
+                "avg_width" in analysis
+                or "avg_height" in analysis
+                or "channels" in analysis
+            ):
+                stats["avg_width"] = analysis.get(
+                    "avg_width",
+                    (
+                        analysis.get("resolution_mean", [None, None])[0]
+                        if isinstance(analysis.get("resolution_mean"), (list, tuple))
+                        else None
+                    ),
+                )
+                stats["avg_height"] = analysis.get(
+                    "avg_height",
+                    (
+                        analysis.get("resolution_mean", [None, None])[1]
+                        if isinstance(analysis.get("resolution_mean"), (list, tuple))
+                        else None
+                    ),
+                )
                 stats["channels"] = analysis.get("channels", 3)
-                stats["entropy_mean"] = analysis.get("entropy_mean", analysis.get("entropy", None))
-                stats["image_count"] = analysis.get("image_count", analysis.get("count", 1))
-            elif "resolution_mean" in analysis and isinstance(analysis.get("resolution_mean"), (list, tuple)):
+                stats["entropy_mean"] = analysis.get(
+                    "entropy_mean", analysis.get("entropy", None)
+                )
+                stats["image_count"] = analysis.get(
+                    "image_count", analysis.get("count", 1)
+                )
+            elif "resolution_mean" in analysis and isinstance(
+                analysis.get("resolution_mean"), (list, tuple)
+            ):
                 res = analysis["resolution_mean"]
                 stats["avg_width"] = res[0]
                 stats["avg_height"] = res[1] if len(res) > 1 else res[0]
@@ -466,8 +604,12 @@ class RecommendEngine:
                 stats["avg_width"] = analysis.get("width") or analysis.get("w") or 224
                 stats["avg_height"] = analysis.get("height") or analysis.get("h") or 224
                 stats["channels"] = analysis.get("channels", 3)
-                stats["entropy_mean"] = analysis.get("entropy", analysis.get("entropy_mean", None))
-                stats["image_count"] = analysis.get("image_count", analysis.get("count", 1))
+                stats["entropy_mean"] = analysis.get(
+                    "entropy", analysis.get("entropy_mean", None)
+                )
+                stats["image_count"] = analysis.get(
+                    "image_count", analysis.get("count", 1)
+                )
 
             # generate augmentation plan from stats
             plan = _generate_augmentation_plan_from_stats(stats)
@@ -476,28 +618,46 @@ class RecommendEngine:
 
             # decide resize based on stats
             try:
-                min_side = min(int(stats.get("avg_width", 224)), int(stats.get("avg_height", 224)))
+                min_side = min(
+                    int(stats.get("avg_width", 224)), int(stats.get("avg_height", 224))
+                )
             except Exception:
                 min_side = 224
 
             if bias == "fast":
                 if min_side >= 96:
-                    size = [96, 96]; method = "bilinear"; suggested_model = "EfficientNet-B0 (fast)"
+                    size = [96, 96]
+                    method = "bilinear"
+                    suggested_model = "EfficientNet-B0 (fast)"
                 else:
-                    size = [64, 64]; method = "nearest"; suggested_model = "TinyNet (very fast)"
+                    size = [64, 64]
+                    method = "nearest"
+                    suggested_model = "TinyNet (very fast)"
             elif bias == "small":
-                size = [96, 96] if min_side >= 96 else [64, 64]; method = "bilinear"; suggested_model = "MobileNetV2 (edge)"
+                size = [96, 96] if min_side >= 96 else [64, 64]
+                method = "bilinear"
+                suggested_model = "MobileNetV2 (edge)"
             elif bias == "quality":
-                size = [224, 224] if min_side >= 224 else [128, 128]; method = "bilinear"; suggested_model = "ResNet50 / EfficientNet-Lite (quality)"
+                size = [224, 224] if min_side >= 224 else [128, 128]
+                method = "bilinear"
+                suggested_model = "ResNet50 / EfficientNet-Lite (quality)"
             else:
                 if min_side >= 224:
-                    size = [224, 224]; method = "bilinear"; suggested_model = "ResNet18 / MobileNetV2"
+                    size = [224, 224]
+                    method = "bilinear"
+                    suggested_model = "ResNet18 / MobileNetV2"
                 elif min_side >= 96:
-                    size = [96, 96]; method = "bilinear"; suggested_model = "EfficientNet-B0 (small)"
+                    size = [96, 96]
+                    method = "bilinear"
+                    suggested_model = "EfficientNet-B0 (small)"
                 elif min_side <= 32:
-                    size = [32, 32]; method = "nearest"; suggested_model = "TinyNet / CIFAR style"
+                    size = [32, 32]
+                    method = "nearest"
+                    suggested_model = "TinyNet / CIFAR style"
                 else:
-                    size = [128, 128]; method = "bilinear"; suggested_model = "General-purpose (mid)"
+                    size = [128, 128]
+                    method = "bilinear"
+                    suggested_model = "General-purpose (mid)"
 
             channels = int(stats.get("channels", 3))
             mean, std = _defaults_for_channels(channels)
@@ -506,7 +666,11 @@ class RecommendEngine:
                 "user_prefs": user_prefs or [],
                 "bias": bias,
                 "augmentation_plan": plan,
-                "resize": {"size": size, "method": method, "suggested_model": suggested_model},
+                "resize": {
+                    "size": size,
+                    "method": method,
+                    "suggested_model": suggested_model,
+                },
                 "normalize": {"mean": mean, "std": std},
                 "mode": "RGB" if channels == 3 else "Grayscale",
                 "entropy": stats.get("entropy_mean"),
@@ -519,9 +683,16 @@ class RecommendEngine:
             return _deterministic_fallback_preprocessing(user_prefs)
 
     # ---- dataset entrypoints ----
-    def recommend_from_dataset(self, dataset_input: Any, sample_limit: int = 200, user_prefs: Optional[List[str]] = None) -> Dict[str, Any]:
+    def recommend_from_dataset(
+        self,
+        dataset_input: Any,
+        sample_limit: int = 200,
+        user_prefs: Optional[List[str]] = None,
+    ) -> Dict[str, Any]:
         try:
-            return recommend_dataset(dataset_input, sample_limit=sample_limit, user_prefs=user_prefs)
+            return recommend_dataset(
+                dataset_input, sample_limit=sample_limit, user_prefs=user_prefs
+            )
         except Exception:
             logger.exception("recommend_from_dataset failed")
             return _deterministic_fallback_dataset(user_prefs)
@@ -532,6 +703,7 @@ class RecommendEngine:
 # -----------------------
 if __name__ == "__main__":
     import json
+
     print("smoke test recommend_dataset on assets/sample_images")
     try:
         print(json.dumps(recommend_dataset("assets/sample_images"), indent=2))

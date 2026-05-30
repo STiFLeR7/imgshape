@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "imgshape"
-version = "4.2.0"
-description = "imgshape v4.2.0 (Bento Intelligence) — Dataset intelligence layer: deterministic fingerprinting, semantic drift, and bento-box UI."
+version = "5.0.0"
+description = "imgshape v5.0.0 (Covenant) — Vision dataset governance, contract enforcement, and regression testing."
 readme = "README.md"
 authors = [
   { name = "Stifler", email = "hillaniljppatel@gmail.com" }
@@ -19,11 +19,10 @@ dependencies = [
   "numpy>=1.21.0",
   "matplotlib>=3.4.0",
   "scikit-image>=0.19.0",
-  "fastapi>=0.104.0",
-  "uvicorn[standard]>=0.24.0",
-  "jinja2>=3.1.0",
   "pyyaml>=6.0",
   "requests>=2.28.0",
+  "click>=8.0.0",
+  "scipy>=1.7.0",
 ]
 
 [project.optional-dependencies]
@@ -105,7 +104,6 @@ classifiers = [
   "Topic :: Scientific/Engineering :: Artificial Intelligence",
   "Intended Audience :: Science/Research",
   "Intended Audience :: Developers",
-  "Framework :: FastAPI",
   "Development Status :: 5 - Production/Stable"
 ]
-keywords = ["images", "dataset", "fingerprinting", "augmentation", "pytorch", "machine-learning", "atlas", "v4"]
+keywords = ["images", "dataset", "fingerprinting", "quality-assurance", "computer-vision", "dataset-contracts", "regression-testing", "ml-governance", "dataset-drift"]

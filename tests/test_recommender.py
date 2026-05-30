@@ -1,6 +1,4 @@
-# tests/test_recommender.py
 import sys
-import os
 from pathlib import Path
 
 # allow running tests from project root: ensure src/ is on sys.path
@@ -9,9 +7,13 @@ SRC = ROOT.joinpath("src")
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-import pytest
+import pytest  # noqa: E402
 
-from imgshape.recommender import recommend_preprocessing, recommend_dataset, RecommendEngine
+from imgshape.recommender import (  # noqa: E402
+    recommend_preprocessing,
+    recommend_dataset,
+    RecommendEngine,
+)
 
 
 @pytest.mark.parametrize("size", [(300, 300), (32, 32)])
@@ -26,12 +28,11 @@ def test_recommend_preprocessing_basic(tmp_path: Path, size):
     # create a tiny image using Pillow if available
     try:
         from PIL import Image
+
         img = Image.new("RGB", size, color=(123, 50, 200))
         img.save(img_path, format="PNG")
-        created = True
     except Exception:
         # Pillow missing: we still exercise fallback behavior by passing a non-image path
-        created = False
         img_path.write_text("not-an-image", encoding="utf-8")
 
     result = recommend_preprocessing(str(img_path))
@@ -40,7 +41,9 @@ def test_recommend_preprocessing_basic(tmp_path: Path, size):
     # keys expected by downstream code / report generation
     assert "resize" in result, "Missing 'resize' key in recommendation"
     assert "normalize" in result, "Missing 'normalize' key in recommendation"
-    assert "entropy" in result or result.get("error") == "fallback", "Missing 'entropy' (or fallback) in recommendation"
+    assert (
+        "entropy" in result or result.get("error") == "fallback"
+    ), "Missing 'entropy' (or fallback) in recommendation"
 
 
 def test_recommend_dataset_and_engine(tmp_path: Path):
@@ -54,6 +57,7 @@ def test_recommend_dataset_and_engine(tmp_path: Path):
     pillow_ok = False
     try:
         from PIL import Image
+
         pillow_ok = True
         for i, s in enumerate([(64, 64), (128, 128), (64, 64)]):
             p = data_dir / f"img_{i}.png"
@@ -77,6 +81,7 @@ def test_recommend_dataset_and_engine(tmp_path: Path):
     if pillow_ok:
         first_img = next(data_dir.glob("*.png"))
         from PIL import Image as PILImage
+
         pil = PILImage.open(first_img).convert("RGB")
         rec_img = engine.recommend_from_image(pil)
         assert isinstance(rec_img, dict)
@@ -93,4 +98,5 @@ def test_recommend_dataset_and_engine(tmp_path: Path):
 if __name__ == "__main__":
     # allow running directly
     import pytest
+
     sys.exit(pytest.main([__file__, "-q"]))

@@ -1,12 +1,13 @@
 # src/imgshape/torchloader.py
 """
-torchloader.py — utilities to produce PyTorch `transforms` (or snippet) from imgshape recommendations.
+torchloader.py — produce PyTorch `transforms` (or snippet) from imgshape recommendations.
 
 Behavior:
 - torchvision present -> returns a Compose-like callable (real or monkeypatched).
 - torchvision missing but torch present -> returns a no-op callable (identity transform).
 - torchvision missing and torch explicitly set to None -> returns a snippet string.
-- torchvision monkeypatched to None while 'torch' not present in sys.modules -> treat as "only torchvision removed" and return a no-op callable (matches tests).
+- torchvision monkeypatched to None while 'torch' not present in sys.modules -> treat as
+  "only torchvision removed" and return a no-op callable (matches tests).
 - prefer_snippet=True -> always return snippet string.
 """
 
@@ -33,13 +34,16 @@ def _noop_callable(x):
     return x
 
 
-def _build_snippet(resize_tuple: Optional[Tuple[int, int]] = None, mean: Optional[List[float]] = None, std: Optional[List[float]] = None) -> str:
+def _build_snippet(
+    resize_tuple: Optional[Tuple[int, int]] = None,
+    mean: Optional[List[float]] = None,
+    std: Optional[List[float]] = None,
+) -> str:
     mean = mean or _IMAGENET_MEAN
     std = std or _IMAGENET_STD
     h = resize_tuple[0] if resize_tuple else 224
     w = resize_tuple[1] if resize_tuple else 224
-    return textwrap.dedent(
-        f"""
+    return textwrap.dedent(f"""
         from torchvision import transforms
 
         transform = transforms.Compose([
@@ -47,8 +51,7 @@ def _build_snippet(resize_tuple: Optional[Tuple[int, int]] = None, mean: Optiona
             transforms.ToTensor(),
             transforms.Normalize(mean={mean}, std={std}),
         ])
-        """
-    ).strip()
+        """).strip()
 
 
 def _detect_torchvision_transforms():
@@ -90,7 +93,9 @@ def _to_compose_from_transforms_module(trans_mod, resize=None, mean=None, std=No
                 pass
         if hasattr(trans_mod, "Normalize"):
             try:
-                tlist.append(trans_mod.Normalize(mean or _IMAGENET_MEAN, std or _IMAGENET_STD))
+                tlist.append(
+                    trans_mod.Normalize(mean or _IMAGENET_MEAN, std or _IMAGENET_STD)
+                )
             except Exception:
                 pass
         return Compose(tlist)
@@ -98,7 +103,9 @@ def _to_compose_from_transforms_module(trans_mod, resize=None, mean=None, std=No
         return None
 
 
-def to_torch_transform(a: Dict[str, Any], b: Optional[Dict[str, Any]] = None, prefer_snippet: bool = False) -> Union[str, Any]:
+def to_torch_transform(
+    a: Dict[str, Any], b: Optional[Dict[str, Any]] = None, prefer_snippet: bool = False
+) -> Union[str, Any]:
     """
     Flexible entrypoint.
 
@@ -111,8 +118,10 @@ def to_torch_transform(a: Dict[str, Any], b: Optional[Dict[str, Any]] = None, pr
       - If prefer_snippet=True => return snippet (str)
       - If torchvision.transforms is importable / monkeypatched -> return Compose(...) (callable)
       - Else if 'torch' in sys.modules and sys.modules['torch'] is not None -> return no-op callable
-      - Else if 'torch' in sys.modules and sys.modules['torch'] is None -> return snippet (explicitly no torch)
-      - Else if 'torch' not in sys.modules but 'torchvision' was monkeypatched to None -> return no-op callable (tests expect that)
+      - Else if 'torch' in sys.modules and sys.modules['torch'] is None ->
+        return snippet (explicitly no torch)
+      - Else if 'torch' not in sys.modules but 'torchvision' was monkeypatched to None ->
+        return no-op callable (tests expect that)
       - Else -> return snippet (safe default)
     """
     # Normalise inputs into a single recommendation dict.
@@ -160,7 +169,10 @@ def to_torch_transform(a: Dict[str, Any], b: Optional[Dict[str, Any]] = None, pr
     trans_mod = _detect_torchvision_transforms()
     if trans_mod:
         compose_obj = _to_compose_from_transforms_module(
-            trans_mod, resize=resize_tuple, mean=(mean_std[0] if mean_std else None), std=(mean_std[1] if mean_std else None)
+            trans_mod,
+            resize=resize_tuple,
+            mean=(mean_std[0] if mean_std else None),
+            std=(mean_std[1] if mean_std else None),
         )
         if compose_obj is not None:
             return compose_obj
@@ -182,7 +194,9 @@ def to_torch_transform(a: Dict[str, Any], b: Optional[Dict[str, Any]] = None, pr
     # (i.e., 'torchvision' exists in sys.modules and is None), interpret this as the test
     # intentionally removing torchvision only — return no-op callable to match test expectations.
     if "torchvision" in sys.modules and sys.modules.get("torchvision") is None:
-        logger.info("torchvision explicitly monkeypatched to None; returning no-op transform by convention.")
+        logger.info(
+            "torchvision explicitly monkeypatched to None; returning no-op transform by convention."
+        )
         return _noop_callable
 
     # Otherwise, default to returning a snippet (safe copy/paste).

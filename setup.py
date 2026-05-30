@@ -7,11 +7,9 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="imgshape",
-    version="4.2.0",
+    version="5.0.0",
     description=(
-        "imgshape v4.2.0 (Bento Intelligence) — Dataset intelligence layer: "
-        "deterministic fingerprinting, semantic drift, and bento-box UI. "
-        "FastAPI web service, plugin system, and Atlas orchestrator."
+        "imgshape v5.0.0 (Covenant) — Vision dataset governance, contract enforcement, and regression testing."
     ),
     long_description=long_description,
     long_description_content_type="text/markdown",
@@ -25,9 +23,10 @@ setup(
         "numpy>=1.21.0",
         "matplotlib>=3.4.0",
         "scikit-image>=0.19.0",
-        "fastapi>=0.104.0",
-        "uvicorn[standard]>=0.24.0",
         "pyyaml>=6.0",
+        "requests>=2.28.0",
+        "click>=8.0.0",
+        "scipy>=1.7.0",
     ],
     extras_require={
         # optional feature groups
@@ -38,7 +37,7 @@ setup(
         "pdf": ["weasyprint>=53.0", "reportlab>=3.6.0", "pyyaml>=6.0"],
         "viz": ["plotly>=5.20.0", "seaborn>=0.12.0"],
         "web": ["fastapi>=0.104.0", "uvicorn[standard]>=0.24.0", "jinja2>=3.1.0"],
-        "plugins": ["importlib-metadata>=6.0", "types-Pillow>=9.0"],
+        "plugins": ["importlib-metadata>=6.0"],
         "dev": [
             "pytest>=7.0",
             "black>=23.0",
@@ -79,13 +78,12 @@ setup(
         "Topic :: Scientific/Engineering :: Artificial Intelligence",
         "Intended Audience :: Science/Research",
         "Intended Audience :: Developers",
-        "Framework :: FastAPI",
         "Development Status :: 5 - Production/Stable",
     ],
     python_requires=">=3.8",
     keywords=(
-        "image-analysis dataset-analytics computer-vision fastapi atlas "
-        "augmentation preprocessing pytorch pipeline fingerprinting decision-engine"
+        "images dataset fingerprinting quality-assurance computer-vision "
+        "dataset-contracts regression-testing ml-governance dataset-drift"
     ),
     url="https://github.com/STiFLeR7/imgshape",
     project_urls={

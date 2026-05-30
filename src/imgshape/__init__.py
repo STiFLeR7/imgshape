@@ -2,13 +2,15 @@ from __future__ import annotations
 
 # src/imgshape/__init__.py
 """
-imgshape package public API (v2.2.0 -> v3.0.0 -> v4.0.0 -> v4.2.0) — lazy exports + safe optional telemetry.
+imgshape package public API (v2.2.0 -> v3.0.0 -> v4.0.0 -> v4.2.0 -> v5.0.0)
+— lazy exports + safe optional telemetry.
 
 Behavior:
 - Avoid importing heavy submodules at import-time.
 - Provide the same top-level names as before via lazy import on attribute access.
 - Telemetry (klyne) is initialized only when env var KLYNE_API_KEY is present.
-- Safe: import-time failures are swallowed so users don't get ImportError when optional deps are missing.
+- Safe: import-time failures are swallowed so users don't get ImportError
+  when optional deps are missing.
 - v3 additions: pipeline, recommender & plugin helpers exposed lazily.
 - v4 additions: Atlas, fingerprinting, and decision engine exposed directly.
 """
@@ -59,6 +61,15 @@ __all__ = [
     "DeploymentTarget",
     "Priority",
     "__version__",
+    # v5 - Testing, Diffing, and Auditing
+    "Contract",
+    "TestRunner",
+    "TestReport",
+    "DatasetDiff",
+    "DiffReport",
+    "generate_provenance_id",
+    "FingerprintLock",
+    "AuditTrailWriter",
 ]
 
 # --- version resolution (best-effort, non-fatal) ---
@@ -112,6 +123,15 @@ _lazy_map = {
     "TaskType": ("imgshape.decision_v4", "TaskType"),
     "DeploymentTarget": ("imgshape.decision_v4", "DeploymentTarget"),
     "Priority": ("imgshape.decision_v4", "Priority"),
+    # v5 - Testing, Diffing, and Auditing
+    "Contract": ("imgshape.contract", "Contract"),
+    "TestRunner": ("imgshape.test", "TestRunner"),
+    "TestReport": ("imgshape.test", "TestReport"),
+    "DatasetDiff": ("imgshape.diff", "DatasetDiff"),
+    "DiffReport": ("imgshape.diff", "DiffReport"),
+    "generate_provenance_id": ("imgshape.audit", "generate_provenance_id"),
+    "FingerprintLock": ("imgshape.audit", "FingerprintLock"),
+    "AuditTrailWriter": ("imgshape.audit", "AuditTrailWriter"),
 }
 
 

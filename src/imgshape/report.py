@@ -10,7 +10,6 @@ Features:
 """
 
 from __future__ import annotations
-import os
 import json
 import logging
 from pathlib import Path
@@ -21,7 +20,9 @@ import tempfile
 logger = logging.getLogger("imgshape.report")
 if not logger.handlers:
     ch = logging.StreamHandler()
-    ch.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s"))
+    ch.setFormatter(
+        logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s")
+    )
     logger.addHandler(ch)
 logger.setLevel(logging.INFO)
 
@@ -32,38 +33,45 @@ _pillow = None
 _weasyprint = None
 _reportlab = None
 
+
 def _try_imports():
     global _jinja2, _markdown, _pillow, _weasyprint, _reportlab
     if _jinja2 is None:
         try:
             import jinja2 as _j
+
             _jinja2 = _j
         except Exception:
             _jinja2 = None
     if _markdown is None:
         try:
             import markdown as _m
+
             _markdown = _m
         except Exception:
             _markdown = None
     if _pillow is None:
         try:
-            from PIL import Image as _I  # only to check availability
+            from PIL import Image as _I  # noqa: F401
+
             _pillow = True
         except Exception:
             _pillow = False
     if _weasyprint is None:
         try:
             import weasyprint as _w
+
             _weasyprint = _w
         except Exception:
             _weasyprint = None
     if _reportlab is None:
         try:
-            import reportlab  # type: ignore
+            import reportlab  # noqa: F401
+
             _reportlab = True
         except Exception:
             _reportlab = False
+
 
 # Basic template for HTML report (single-file)
 _HTML_TEMPLATE = """
@@ -106,7 +114,8 @@ pre,code{background:#f3f4f6;padding:8px;border-radius:6px;overflow:auto}
   {% if semantic_drift %}
   <h2>Semantic Drift</h2>
   <div class="card">
-    <p><strong>Latent Embedding Centroid:</strong> <i>(Captured from lightweight vision model)</i></p>
+    <p><strong>Latent Embedding Centroid:</strong>
+       <i>(Captured from lightweight vision model)</i></p>
     <pre>{{ semantic_drift_json }}</pre>
   </div>
   {% endif %}
@@ -134,11 +143,18 @@ pre,code{background:#f3f4f6;padding:8px;border-radius:6px;overflow:auto}
 </html>
 """
 
+
 def _gather_basic_summary(analysis: Optional[Dict[str, Any]]) -> Dict[str, Any]:
     if not analysis:
         return {"image_count": 0}
     # create a small, human-friendly summary
-    keys = ["image_count", "mean_entropy", "resolution_mean", "duplicate_ratio", "imbalance_score"]
+    keys = [
+        "image_count",
+        "mean_entropy",
+        "resolution_mean",
+        "duplicate_ratio",
+        "imbalance_score",
+    ]
     summary = {}
     for k in keys:
         if k in analysis:
@@ -149,6 +165,7 @@ def _gather_basic_summary(analysis: Optional[Dict[str, Any]]) -> Dict[str, Any]:
         summary["image_count"] = analysis.get("image_count", analysis.get("count", 0))
     return summary
 
+
 def _collect_sample_thumbnails(dataset_path: str, max_images: int = 6) -> list[str]:
     """
     Return base64-encoded PNG thumbnails (so HTML is single-file).
@@ -158,6 +175,7 @@ def _collect_sample_thumbnails(dataset_path: str, max_images: int = 6) -> list[s
     if not _pillow:
         return []
     from PIL import Image
+
     p = Path(dataset_path)
     if not p.exists():
         return []
@@ -185,13 +203,21 @@ def _collect_sample_thumbnails(dataset_path: str, max_images: int = 6) -> list[s
             logger.exception("thumbnail generation failed for %s", f)
     return out_b64
 
+
 # Public API -----------------------------------------------------
 
-def generate_markdown_report(dataset_path: str, out_md_path: str, analysis: Optional[Dict[str, Any]] = None, pipeline: Optional[Dict[str, Any]] = None) -> str:
+
+def generate_markdown_report(
+    dataset_path: str,
+    out_md_path: str,
+    analysis: Optional[Dict[str, Any]] = None,
+    pipeline: Optional[Dict[str, Any]] = None,
+) -> str:
     """
     Create a Markdown report at out_md_path.
     - dataset_path: path to dataset (used for thumbnails)
-    - analysis: optional precomputed analysis dict (if None, will try to call imgshape.analyze.analyze_dataset)
+    - analysis: optional precomputed analysis dict. If None, will try to
+      call imgshape.analyze.analyze_dataset.
     - pipeline: optional recommended pipeline dict to include
     Returns the path to the written markdown file.
     """
@@ -200,6 +226,7 @@ def generate_markdown_report(dataset_path: str, out_md_path: str, analysis: Opti
     if analysis is None:
         try:
             from imgshape.analyze import analyze_dataset
+
             analysis = analyze_dataset(dataset_path)
         except Exception as e:
             logger.debug("analyze_dataset failed: %s", e)
@@ -208,7 +235,9 @@ def generate_markdown_report(dataset_path: str, out_md_path: str, analysis: Opti
     summary = _gather_basic_summary(analysis)
     lines = []
     lines.append(f"# imgshape report — {Path(dataset_path).name}\n")
-    lines.append(f"**imgshape version:** {getattr(__import__('imgshape'), '__version__', 'unknown')}\n")
+    lines.append(
+        f"**imgshape version:** {getattr(__import__('imgshape'), '__version__', 'unknown')}\n"
+    )
     lines.append("## Summary\n")
     for k, v in summary.items():
         lines.append(f"- **{k}**: `{v}`")
@@ -216,20 +245,26 @@ def generate_markdown_report(dataset_path: str, out_md_path: str, analysis: Opti
     lines.append("```json")
     lines.append(json.dumps(analysis, indent=2))
     lines.append("```\n")
-    
+
     # Semantic Drift (v4.1)
     latent_emb = None
     if "profiles" in analysis and "semantic" in analysis["profiles"]:
         latent_emb = analysis["profiles"]["semantic"].get("latent_embedding")
     elif "latent_embedding" in analysis:
         latent_emb = analysis["latent_embedding"]
-        
+
     if latent_emb:
         lines.append("## Semantic Drift\n")
-        lines.append("> Centroid of semantic embeddings captured for this dataset version.\n")
+        lines.append(
+            "> Centroid of semantic embeddings captured for this dataset version.\n"
+        )
         lines.append("```json")
         # Just show first few elements if very long
-        lines.append(json.dumps({"latent_embedding_centroid": latent_emb[:8] + ["..."]}, indent=2))
+        lines.append(
+            json.dumps(
+                {"latent_embedding_centroid": latent_emb[:8] + ["..."]}, indent=2
+            )
+        )
         lines.append("```\n")
 
     if pipeline:
@@ -251,7 +286,13 @@ def generate_markdown_report(dataset_path: str, out_md_path: str, analysis: Opti
     return str(out_md_path)
 
 
-def generate_html_report(dataset_path: str, out_html_path: str, analysis: Optional[Dict[str, Any]] = None, pipeline: Optional[Dict[str, Any]] = None, convert_pdf: bool = False) -> Dict[str, str]:
+def generate_html_report(
+    dataset_path: str,
+    out_html_path: str,
+    analysis: Optional[Dict[str, Any]] = None,
+    pipeline: Optional[Dict[str, Any]] = None,
+    convert_pdf: bool = False,
+) -> Dict[str, str]:
     """
     Create an interactive single-file HTML report (and optionally convert to PDF).
     Returns a dict with keys: html_path, pdf_path (may be None)
@@ -260,6 +301,7 @@ def generate_html_report(dataset_path: str, out_html_path: str, analysis: Option
     if analysis is None:
         try:
             from imgshape.analyze import analyze_dataset
+
             analysis = analyze_dataset(dataset_path)
         except Exception as e:
             logger.debug("analyze_dataset failed: %s", e)
@@ -268,14 +310,14 @@ def generate_html_report(dataset_path: str, out_html_path: str, analysis: Option
     title = Path(dataset_path).name
     summary = _gather_basic_summary(analysis)
     thumbs = _collect_sample_thumbnails(dataset_path, max_images=6)
-    
+
     # Semantic Drift (v4.1)
     latent_emb = None
     if "profiles" in analysis and "semantic" in analysis["profiles"]:
         latent_emb = analysis["profiles"]["semantic"].get("latent_embedding")
     elif "latent_embedding" in analysis:
         latent_emb = analysis["latent_embedding"]
-    
+
     # render template
     ctx = {
         "title": title,
@@ -285,7 +327,14 @@ def generate_html_report(dataset_path: str, out_html_path: str, analysis: Option
         "thumbnails": thumbs,
         "pipeline_json": json.dumps(pipeline or {}, indent=2),
         "semantic_drift": latent_emb is not None,
-        "semantic_drift_json": json.dumps({"latent_embedding_centroid": latent_emb[:16] + ["..."]} if latent_emb else {}, indent=2),
+        "semantic_drift_json": json.dumps(
+            (
+                {"latent_embedding_centroid": latent_emb[:16] + ["..."]}
+                if latent_emb
+                else {}
+            ),
+            indent=2,
+        ),
     }
     html = _HTML_TEMPLATE
     # try jinja2 rendering if available (better escaping)
@@ -295,15 +344,21 @@ def generate_html_report(dataset_path: str, out_html_path: str, analysis: Option
             html = tmpl.render(**ctx)
         except Exception:
             logger.exception("jinja2 rendering failed; falling back to simple format")
-            html = _HTML_TEMPLATE.format(**ctx)  # naive fallback (may not work for dicts)
+            html = _HTML_TEMPLATE.format(
+                **ctx
+            )  # naive fallback (may not work for dicts)
     else:
         # basic fallback: do simple replacements (works because template uses {{var}} markers)
         try:
             # replace simple scalars; for dicts use json dumps
             html = _HTML_TEMPLATE.replace("{{ title }}", str(ctx["title"]))
             html = html.replace("{{ version }}", str(ctx["version"]))
-            html = html.replace("{{ analysis_json }}", ctx["analysis_json"].replace("<", "&lt;"))
-            html = html.replace("{{ pipeline_json }}", ctx["pipeline_json"].replace("<", "&lt;"))
+            html = html.replace(
+                "{{ analysis_json }}", ctx["analysis_json"].replace("<", "&lt;")
+            )
+            html = html.replace(
+                "{{ pipeline_json }}", ctx["pipeline_json"].replace("<", "&lt;")
+            )
             # thumbnails and summary are handled below more carefully
         except Exception:
             logger.exception("simple html fallback failed")
@@ -313,27 +368,66 @@ def generate_html_report(dataset_path: str, out_html_path: str, analysis: Option
         # generate a summary html block
         summary_html = ""
         for k, v in summary.items():
-            summary_html += f'<div class="metric"><strong>{k}</strong><div>{v}</div></div>\n'
-        html = html.replace("{% for key, val in summary.items() %}\n      <div class=\"metric\"><strong>{{ key }}</strong><div>{{ val }}</div></div>\n      {% endfor %}", summary_html)
+            summary_html += (
+                f'<div class="metric"><strong>{k}</strong><div>{v}</div></div>\n'
+            )
+        target_summary = (
+            "{% for key, val in summary.items() %}\n"
+            '      <div class="metric"><strong>{{ key }}</strong>'
+            "<div>{{ val }}</div></div>\n"
+            "      {% endfor %}"
+        )
+        html = html.replace(target_summary, summary_html)
 
         # Handle thumbnails
-        thumbs_html = "".join([f'<img src="data:image/png;base64,{b64}"/>' for b64 in thumbs])
-        html = html.replace("{% for b64 in thumbnails %}\n      <img src=\"data:image/png;base64,{{ b64 }}\"/>\n    {% endfor %}", thumbs_html)
+        thumbs_html = "".join(
+            [f'<img src="data:image/png;base64,{b64}"/>' for b64 in thumbs]
+        )
+        target_thumbs = (
+            "{% for b64 in thumbnails %}\n"
+            '      <img src="data:image/png;base64,{{ b64 }}"/>\n'
+            "    {% endfor %}"
+        )
+        html = html.replace(target_thumbs, thumbs_html)
 
         # Handle semantic drift
         if latent_emb:
-            drift_html = f'<div class="card"><p><strong>Latent Embedding Centroid:</strong> <i>(Captured from lightweight vision model)</i></p><pre>{ctx["semantic_drift_json"]}</pre></div>'
-            html = html.replace("{% if semantic_drift %}\n  <h2>Semantic Drift</h2>\n  <div class=\"card\">\n    <p><strong>Latent Embedding Centroid:</strong> <i>(Captured from lightweight vision model)</i></p>\n    <pre>{{ semantic_drift_json }}</pre>\n  </div>\n  {% endif %}", f"<h2>Semantic Drift</h2>\n{drift_html}")
+            drift_html = (
+                '<div class="card"><p><strong>Latent Embedding Centroid:</strong> '
+                "<i>(Captured from lightweight vision model)</i></p>"
+                f'<pre>{ctx["semantic_drift_json"]}</pre></div>'
+            )
+            target_drift = (
+                "{% if semantic_drift %}\n"
+                "  <h2>Semantic Drift</h2>\n"
+                '  <div class="card">\n'
+                "    <p><strong>Latent Embedding Centroid:</strong> "
+                "<i>(Captured from lightweight vision model)</i></p>\n"
+                "    <pre>{{ semantic_drift_json }}</pre>\n"
+                "  </div>\n"
+                "  {% endif %}"
+            )
+            html = html.replace(
+                target_drift,
+                f"<h2>Semantic Drift</h2>\n{drift_html}",
+            )
         else:
             # Strip the tags entirely if no drift
             import re
-            html = re.sub(r"{% if semantic_drift %}.*?{% endif %}", "", html, flags=re.DOTALL)
+
+            html = re.sub(
+                r"{% if semantic_drift %}.*?{% endif %}", "", html, flags=re.DOTALL
+            )
 
         # Cleanup other jinja tags if they remain
         html = html.replace("{% if analysis %}", "").replace("{% endif %}", "")
         html = html.replace("{% if thumbnails %}", "").replace("{% if pipeline %}", "")
-        html = html.replace("{{ analysis_json }}", ctx["analysis_json"]).replace("{{ pipeline_json }}", ctx["pipeline_json"])
-        html = html.replace("{{ title }}", str(ctx["title"])).replace("{{ version }}", str(ctx["version"]))
+        html = html.replace("{{ analysis_json }}", ctx["analysis_json"]).replace(
+            "{{ pipeline_json }}", ctx["pipeline_json"]
+        )
+        html = html.replace("{{ title }}", str(ctx["title"])).replace(
+            "{{ version }}", str(ctx["version"])
+        )
     out_html_path = Path(out_html_path)
     out_html_path.write_text(html, encoding="utf-8")
     logger.info("HTML report written to %s", out_html_path)
@@ -352,10 +446,15 @@ def generate_html_report(dataset_path: str, out_html_path: str, analysis: Option
                 pdf_path = None
         elif _reportlab:
             # reportlab conversion is non-trivial; leave instruction for user
-            logger.warning("ReportLab detected but no HTML conversion implemented. Consider installing WeasyPrint.")
+            logger.warning(
+                "ReportLab detected but no HTML conversion implemented. "
+                "Consider installing WeasyPrint."
+            )
             pdf_path = None
         else:
-            logger.info("No PDF converter available (install weasyprint to enable HTML->PDF conversion)")
+            logger.info(
+                "No PDF converter available (install weasyprint to enable HTML->PDF conversion)"
+            )
             pdf_path = None
 
     return {"html_path": str(out_html_path), "pdf_path": pdf_path}

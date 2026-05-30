@@ -1,11 +1,9 @@
 # tests/test_report.py
 from pathlib import Path
-import json
-
-import pytest
 
 try:
     from PIL import Image
+
     PIL_AVAILABLE = True
 except Exception:
     PIL_AVAILABLE = False
@@ -36,14 +34,21 @@ def test_generate_markdown(tmp_path: Path):
 
     out_md = tmp_path / "report.md"
     analysis = {"image_count": 1, "entropy_mean": 4.0, "resolution_mean": [32, 32]}
-    pipeline = {"preprocessing": [{"name": "resize", "spec": {"resize": [256, 256]}}], "augmentations": []}
+    pipeline = {
+        "preprocessing": [{"name": "resize", "spec": {"resize": [256, 256]}}],
+        "augmentations": [],
+    }
 
     # Act: generate markdown report
-    md_path = generate_markdown_report(str(dataset_dir), str(out_md), analysis=analysis, pipeline=pipeline)
+    generate_markdown_report(
+        str(dataset_dir), str(out_md), analysis=analysis, pipeline=pipeline
+    )
 
     # Assert: file exists and contains expected markers
     assert out_md.exists(), "Markdown report was not written"
     content = out_md.read_text(encoding="utf-8")
     assert "imgshape report" in content.lower(), "Report header missing"
     # entropy value should appear in JSON analysis block
-    assert '"entropy_mean": 4.0' in content or "4.0" in content, "Entropy value not present in report"
+    assert (
+        '"entropy_mean": 4.0' in content or "4.0" in content
+    ), "Entropy value not present in report"

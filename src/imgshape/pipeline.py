@@ -4,21 +4,26 @@ RecommendationPipeline — v3.0.0
 Executable preprocessing + augmentation pipelines
 Supports: save/load/export/apply on-disk datasets.
 """
+
 from __future__ import annotations
-import os, json, traceback
+import json
+import traceback
 from typing import List, Callable, Optional, Any, Dict
 from PIL import Image
 from pathlib import Path
 
 try:
-    import torchvision.transforms as tv
+    import torchvision.transforms as tv  # noqa: F401
+
     HAS_TORCHVISION = True
 except Exception:
     HAS_TORCHVISION = False
 
 
 class PipelineStep:
-    def __init__(self, name: str, fn: Optional[Callable] = None, spec: Optional[Dict] = None):
+    def __init__(
+        self, name: str, fn: Optional[Callable] = None, spec: Optional[Dict] = None
+    ):
         self.name = name
         self.fn = fn
         self.spec = spec or {}
@@ -40,7 +45,9 @@ class PipelineStep:
 
 
 class RecommendationPipeline:
-    def __init__(self, steps: Optional[List[PipelineStep]] = None, meta: Optional[Dict] = None):
+    def __init__(
+        self, steps: Optional[List[PipelineStep]] = None, meta: Optional[Dict] = None
+    ):
         self.steps = steps or []
         self.meta = meta or {}
 
@@ -58,7 +65,9 @@ class RecommendationPipeline:
     def load(cls, path: str) -> "RecommendationPipeline":
         with open(path, "r", encoding="utf-8") as f:
             data = json.load(f)
-        steps = [PipelineStep(s["name"], spec=s.get("spec")) for s in data.get("steps", [])]
+        steps = [
+            PipelineStep(s["name"], spec=s.get("spec")) for s in data.get("steps", [])
+        ]
         return cls(steps=steps, meta=data.get("meta", {}))
 
     def export(self, format: str = "torchvision") -> str:
@@ -66,11 +75,18 @@ class RecommendationPipeline:
             return json.dumps(self.as_dict(), indent=2)
         if format == "yaml":
             import yaml
+
             return yaml.safe_dump(self.as_dict())
         if format == "torchvision":
             if not HAS_TORCHVISION:
-                return "# torchvision not installed\n" + json.dumps(self.as_dict(), indent=2)
-            lines = ["import torchvision.transforms as transforms", "", "pipeline = transforms.Compose(["]
+                return "# torchvision not installed\n" + json.dumps(
+                    self.as_dict(), indent=2
+                )
+            lines = [
+                "import torchvision.transforms as transforms",
+                "",
+                "pipeline = transforms.Compose([",
+            ]
             for s in self.steps:
                 spec = s.spec
                 if "resize" in spec:
@@ -81,17 +97,27 @@ class RecommendationPipeline:
                 if "color_jitter" in spec:
                     cj = spec["color_jitter"]
                     lines.append(
-                        f"    transforms.ColorJitter({cj.get('brightness',0)},"
-                        f"{cj.get('contrast',0)},{cj.get('saturation',0)},{cj.get('hue',0)}),"
+                        f"    transforms.ColorJitter({cj.get('brightness', 0)}, "
+                        f"{cj.get('contrast', 0)}, {cj.get('saturation', 0)}, {cj.get('hue', 0)}),"
                     )
             lines.append("])")
             return "\n".join(lines)
         raise ValueError("unsupported export format")
 
-    def apply(self, input_dir: str, output_dir: str, pattern: str = "*.*", dry_run: bool = False):
+    def apply(
+        self,
+        input_dir: str,
+        output_dir: str,
+        pattern: str = "*.*",
+        dry_run: bool = False,
+    ):
         input_dir, output_dir = Path(input_dir), Path(output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
-        files = [p for p in input_dir.rglob(pattern) if p.suffix.lower() in {".jpg", ".png", ".jpeg"}]
+        files = [
+            p
+            for p in input_dir.rglob(pattern)
+            if p.suffix.lower() in {".jpg", ".png", ".jpeg"}
+        ]
         for src in files:
             dst = output_dir.joinpath(src.relative_to(input_dir))
             dst.parent.mkdir(parents=True, exist_ok=True)

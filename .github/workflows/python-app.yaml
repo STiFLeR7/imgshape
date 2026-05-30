@@ -117,52 +117,37 @@ jobs:
       - name: CLI Test - Help
         run: imgshape --help
 
-      - name: CLI Test - Version (non-blocking)
-        run: imgshape --version || true
-
-      - name: CLI Test - Shape detection
-        run: python -m imgshape.cli --path sample/test.png --shape
-
-      - name: CLI Test - Analysis
-        run: python -m imgshape.cli --path sample/test.png --analyze
-
-      - name: CLI Test - Recommendation
-        run: python -m imgshape.cli --path sample/test.png --recommend --augment
-
-      - name: CLI Test - Report (Markdown) (non-blocking)
-        run: python -m imgshape.cli --path sample --report --augment --out tmp/ci_report.md || true
-
-      - name: CLI Test - Report (HTML) (non-blocking)
-        run: python -m imgshape.cli --path sample --report --augment --out tmp/ci_report.html || true
-
-      - name: CLI Test - Visualization (non-blocking) — run script
+      - name: Create Test Contract
         shell: bash
         run: |
-          # run deterministic script that attempts to generate an interactive plot (if viz available)
-          mkdir -p .github/scripts
-          python .github/scripts/plot_test.py || true
+          cat << 'EOF' > tmp/test_contract.yaml
+          schema_version: "5.0"
+          dataset:
+            expected_channels: 3
+            allowed_formats: [png, jpg]
+            resolution_min: [100, 100]
+          quality:
+            blur_threshold: 1.0
+          EOF
 
-      - name: CLI Test - Model Compatibility (non-blocking)
-        run: python -m imgshape.cli --dir sample --check mobilenet_v2 || true
+      - name: CLI Test - Validate Contract
+        run: imgshape validate sample tmp/test_contract.yaml --lock
 
-      - name: CLI Test - TorchLoader (transform snippet) (non-blocking)
-        run: python -m imgshape.cli --path sample --torchloader --out tmp/transform_snippet.py || true
+      - name: CLI Test - Run Dataset Tests (Markdown)
+        run: imgshape test sample tmp/test_contract.yaml --output markdown --save tmp/test_report.md
 
-      # ---- v4 Atlas Tests ----
-      - name: CLI Test - v4 Fingerprint
-        run: imgshape --fingerprint --path sample --out tmp/v4_fingerprint.json
+      - name: CLI Test - Run Dataset Tests (JSON)
+        run: imgshape test sample tmp/test_contract.yaml --output json --save tmp/test_report.json
 
-      - name: CLI Test - v4 Atlas Analyze
-        run: imgshape --atlas --path sample --intent training --out tmp/v4_analysis.json
+      - name: CLI Test - Extract Fingerprint
+        run: imgshape fingerprint sample --save tmp/baseline_fingerprint.json
 
-      - name: CLI Test - v4 Decisions
-        run: imgshape --decisions --path sample --intent training --out tmp/v4_decisions.json
+      - name: CLI Test - Diff Datasets
+        run: imgshape diff tmp/baseline_fingerprint.json sample
 
+      # ---- Run Test Suite ----
       - name: Run pytest (all tests)
         run: pytest -q --disable-warnings --maxfail=1
-
-      - name: Run pytest (v4 tests only)
-        run: pytest tests/v4_test.py -v --disable-warnings
 
       - name: Build distributions
         run: python -m build

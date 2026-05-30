@@ -7,19 +7,16 @@ small fallback image into the provided tmp_path.
 
 This keeps the test deterministic and avoids brittle path assumptions.
 """
+
 from pathlib import Path
-import tempfile
-import shutil
-import sys
 import urllib.request
 
 from imgshape.analyze import analyze_type
 
-
 FILENAME = "image_created_with_a_mobile_phone.png"
 FALLBACK_URLS = [
-    # primary repo raw (may fail for forks/private)
-    "https://raw.githubusercontent.com/STiFLeR7/imgshape/master/assets/sample_images/Image_created_with_a_mobile_phone.png",
+    "https://raw.githubusercontent.com/STiFLeR7/"
+    "imgshape/master/assets/sample_images/Image_created_with_a_mobile_phone.png",
     # commons fallback
     "https://upload.wikimedia.org/wikipedia/commons/7/77/Delete_key1.jpg",
 ]
@@ -116,10 +113,17 @@ def test_analyze_type(tmp_path):
     if entropy is None:
         entropy = result.get("meta", {}).get("entropy")
 
-    assert entropy is not None, "analyze_type result missing 'entropy' (top-level or meta)"
+    assert (
+        entropy is not None
+    ), "analyze_type result missing 'entropy' (top-level or meta)"
 
-    # try several plausible keys for guess_type, and assert it's present (or derive a fallback string)
-    guess = result.get("guess_type") or result.get("meta", {}).get("guess_type") or result.get("type") or result.get("guess")
+    # try several plausible keys for guess_type, and assert it's present (or derive fallback)
+    guess = (
+        result.get("guess_type")
+        or result.get("meta", {}).get("guess_type")
+        or result.get("type")
+        or result.get("guess")
+    )
     if not guess:
         # derive a simple fallback so test gives useful diagnostics rather than being brittle
         meta = result.get("meta", {}) or {}
@@ -139,4 +143,6 @@ def test_analyze_type(tmp_path):
     assert isinstance(guess, str), "guess_type must be a string-like value"
 
     # Print concise pass message for local runs
-    print(f"✅ Analyze Test Passed — asset={asset}, entropy={entropy}, guess_type={guess}")
+    print(
+        f"✅ Analyze Test Passed — asset={asset}, entropy={entropy}, guess_type={guess}"
+    )

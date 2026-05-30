@@ -56,7 +56,11 @@ def resize_image(
     try:
         img = Image.open(img_path).convert("RGB")
     except Exception as e:
-        return {"error": "unreadable_file", "input_path": str(img_path), "detail": str(e)}
+        return {
+            "error": "unreadable_file",
+            "input_path": str(img_path),
+            "detail": str(e),
+        }
 
     target_size = _parse_size(size)
     filename = img_path.stem
